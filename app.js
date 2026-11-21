@@ -16,6 +16,7 @@
   const pesoV = (v) => montos() ? L.peso(v) : '—';
   const hoy = () => L.hoyChile();
   const ICO = {
+    tablero: '<rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect>',
     registro: '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M8 2v4M16 2v4M3 10h18"></path>',
     planificador: '<path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9"></path>',
     dias: '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M12 13v5M9.5 15.5h5"></path>',
@@ -131,6 +132,7 @@
 
   // ================================================================== estructura
   const SECCIONES = [
+    { id: 'tablero', txt: 'Tablero', ve: () => true },
     { id: 'registro', txt: 'Registro del día', ve: () => true },
     { id: 'planificador', txt: 'Planificador', ve: () => tiene('Planificar') || tiene('DiasPlan') || tiene('ReportesPlan') },
     { id: 'buscar', txt: 'Buscar persona', ve: () => true },
@@ -194,7 +196,7 @@
   }
   async function ir() {
     if (!$('#vista')) return;
-    const id = (location.hash.replace(/^#\/?/, '') || 'registro').split('?')[0];
+    const id = (location.hash.replace(/^#\/?/, '') || 'tablero').split('?')[0];
     const sec = SECCIONES.find((s) => s.id === id && s.ve()) || SECCIONES[0];
     document.querySelectorAll('.menu a').forEach((a) => a.classList.toggle('activo', a.dataset.sec === sec.id));
     $('#tit-movil').textContent = sec.txt;
@@ -759,6 +761,45 @@
   }
 
   const fechaCorta = (s) => { const [y, m, d] = String(s).split('-'); return d + '-' + m + '-' + y; };
+  // ================================================================== TABLERO (inicio)
+  async function vistaTablero(v) {
+    const h = hoy(), mes = h.slice(0, 7), dAct = Number(h.slice(8, 10));
+    const [ay, am] = mes.split('-').map(Number), ultDia = (y, m) => new Date(y, m, 0).getDate(), pad2 = (n) => String(n).padStart(2, '0');
+    const pAy = am === 1 ? ay - 1 : ay, pAm = am === 1 ? 12 : am - 1, pMes = pAy + '-' + pad2(pAm);
+    const dPrev = Math.min(dAct, ultDia(pAy, pAm));
+    const nAy = am === 12 ? ay + 1 : ay, nAm = am === 12 ? 1 : am + 1;
+    const enQ1 = dAct <= 15;
+    const sigD = enQ1 ? mes + '-16' : nAy + '-' + pad2(nAm) + '-01';
+    const sigH = enQ1 ? mes + '-' + pad2(ultDia(ay, am)) : nAy + '-' + pad2(nAm) + '-15';
+    const [tAct, tPrev, planes] = await Promise.all([
+      DB.turnos({ desde: mes + '-01', hasta: h }), DB.turnos({ desde: pMes + '-01', hasta: pMes + '-' + pad2(dPrev) }),
+      DB.plan({ desde: sigD, hasta: sigH }).catch(() => []) ]);
+    const gasto = (lista, s) => lista.filter((t) => !s || t.sucursal === s).reduce((a, t) => a + Number(t.total), 0);
+    const semaforo = (act, ant) => {
+      if (!ant && !act) return { txt: 'Sin gasto', cls: 'gris', pct: null };
+      if (!ant) return { txt: 'Sin base', cls: 'aviso', pct: null };
+      const pct = (act - ant) / ant * 100;
+      if (pct <= 5) return { txt: 'Verde', cls: 'ok', pct };
+      if (pct <= 15) return { txt: 'Amarillo', cls: 'aviso', pct };
+      return { txt: 'Rojo', cls: 'mal', pct };
+    };
+    const sumAct = gasto(tAct), sumPrev = gasto(tPrev), sumPlan = planes.filter((p) => p.estado !== 'CANCELADO').reduce((a, p) => a + Number(p.total), 0);
+    const filas = visibles().map((s) => { const a = gasto(tAct, s), b = gasto(tPrev, s); return { s, a, b, sem: semaforo(a, b) }; });
+    const rojos = filas.filter((x) => x.sem.cls === 'mal').length;
+    v.innerHTML = cabecera('Tablero', 'Indicadores del mes: gasto por local comparado con el mismo período del mes anterior.') +
+      '<section class="tarjetas">' +
+      tarjeta('Gasto de este mes', pesoV(sumAct), tAct.length + ' turnos · al ' + dAct + ' de ' + L.MESES[am - 1]) +
+      tarjeta('Mismo período mes anterior', pesoV(sumPrev), 'del 1 al ' + dPrev + ' de ' + L.MESES[pAm - 1]) +
+      tarjeta('Planificado próxima quincena', pesoV(sumPlan), planes.length + ' turnos planificados', true) +
+      tarjeta('Locales en rojo', String(rojos), rojos ? 'más de 15% sobre el mes anterior' : 'ninguno', false) +
+      '</section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Gasto por local</h2>' +
+      '<p class="nota" style="margin:0 0 8px">Verde: hasta 5% más que el mes anterior. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
+      filas.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + (x.sem.pct == null ? '—' : (x.sem.pct > 0 ? '+' : '') + x.sem.pct.toFixed(1) + '%') + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
+      '</tbody></table></div></section>';
+  }
+
   // revisión para la administración: registros que conviene mirar (último año)
   async function revisarDatos() {
     const desde = L.sumarDias(hoy(), -365);
@@ -894,7 +935,7 @@
     if (!filtro.nombre) f.nombre.focus();
   }
 
-  const VISTAS = { registro: (v) => vistaRegistro(v), planificador: vistaPlanificador, dias: vistaDias, pagos: (v) => vistaPagos(v), conciliacion: vistaConciliacion,
+  const VISTAS = { tablero: (v) => vistaTablero(v), registro: (v) => vistaRegistro(v), planificador: vistaPlanificador, dias: vistaDias, pagos: (v) => vistaPagos(v), conciliacion: vistaConciliacion,
     personas: (v) => vistaPersonas(v, '', null), reportes: (v) => vistaReportes(v), historial: (v) => vistaHistorial(v, ''), usuarios: (v) => vistaUsuarios(v),
     buscar: (v) => vistaBuscar(v) };
 
