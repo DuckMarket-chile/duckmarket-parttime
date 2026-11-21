@@ -785,6 +785,10 @@
       if (pct <= 15) return { txt: 'Amarillo', cls: 'aviso', pct };
       return { txt: 'Rojo', cls: 'mal', pct };
     };
+    // part-time del mes: turnos y pagos, de mayor a menor
+    const pers = new Map();
+    tAct.forEach((t) => { const k = L.normNombre(t.nombre); const x = pers.get(k) || { nombre: t.nombre, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); pers.set(k, x); });
+    const ranking = [...pers.values()].sort((a, b) => (b.turnos - a.turnos) || (b.total - a.total)).slice(0, 30);
     const sumAct = gasto(tAct), sumPrev = gasto(tPrev), sumPlan = planes.filter((p) => p.estado !== 'CANCELADO').reduce((a, p) => a + Number(p.total), 0);
     const filas = visibles().map((s) => { const a = gasto(tAct, s), b = gasto(tPrev, s); return { s, a, b, sem: semaforo(a, b) }; });
     const rojos = filas.filter((x) => x.sem.cls === 'mal').length;
@@ -799,7 +803,11 @@
       '<p class="nota" style="margin:0 0 8px">Verde: hasta 5% más que el mes anterior. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
       filas.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
-      '</tbody></table></div></section>';
+      '</tbody></table></div></section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Part-time del mes: turnos y pagos</h2>' +
+      (ranking.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' +
+      ranking.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Pagos del mes">' + pesoV(x.total) + '</td></tr>').join('') +
+      '</tbody></table></div>' : '<p class="nota" style="margin:0">No hay turnos registrados este mes.</p>') + '</section>';
   }
 
   // revisión para la administración: registros que conviene mirar (último año)
