@@ -851,8 +851,7 @@
         lista.map((p) => '<tr><td class="fuerte" data-t="Usuario">' + esc(p.usuario) + '</td><td data-t="Nombre">' + esc(p.nombre) + '</td><td data-t="Rol">' + (p.admin ? est('Administrador', 'info') : esc(nombreRol(p.rol))) + '</td><td data-t="Sucursal">' + esc(p.sucursal || 'Oficina') + '</td>' +
           '<td class="num" data-t="Permisos">' + (p.admin ? 'todos' : (p.permisos || []).length) + '</td><td data-t="Estado">' + (p.activo ? est('Activo', 'ok') : est('Desactivado', 'neu')) + '</td>' +
           '<td data-t="">' + (S.perfil.admin || !p.admin ? '<button class="btn chico" data-acc="editar" data-id="' + p.id + '">Editar</button>' : '') + '</td></tr>').join('') + '</tbody></table></div>' +
-        '<div class="ayuda"><b style="color:var(--azul)">Crear un usuario nuevo:</b> en Supabase → Authentication → Users → Add user, con el correo <b>usuario@' + esc((window.CONFIG_PARTTIME || {}).dominio || 'parttime.duckmarket.cl') + '</b>, una clave y “Auto confirm”. ' +
-        'Después agrégalo a la tabla perfiles (ver GUIA en la carpeta Web_PartTime) y aquí le das el rol y los permisos.</div>';
+        (S.perfil.admin ? '<div class="botones"><button class="btn ama" data-acc="nuevo">Nuevo usuario</button></div>' : '');
     } else {
       cuerpo = '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Rol</th><th class="num">Permisos</th><th class="num">Usuarios</th><th></th></tr></thead><tbody>' +
         '<tr><td class="fuerte" data-t="Rol">Administrador</td><td class="num" data-t="Permisos">todos</td><td class="num" data-t="Usuarios">' + lista.filter((p) => p.admin).length + '</td><td class="gris" data-t="">fijo</td></tr>' +
@@ -867,6 +866,33 @@
     v.onclick = async (ev) => {
       const b = ev.target.closest('[data-acc]'); if (!b) return;
       if (b.dataset.acc === 'pest') return vistaUsuarios(v, b.dataset.p);
+      if (b.dataset.acc === 'nuevo') {
+        const opcionesRol = [['admin', 'Administrador (todo)']].concat(roles.map((r) => [r.id, r.nombre]));
+        const r = await dialogo('Nuevo usuario', '<div class="campos2"><label class="campo">Usuario (para entrar)<input name="usuario" required autocomplete="off" placeholder="ej. andes2"></label>' +
+          '<label class="campo">Nombre<input name="nombre" required></label></div>' +
+          '<label class="campo">Clave inicial (mínimo 8 caracteres)<input name="clave" type="password" required minlength="8" autocomplete="new-password"></label>' +
+          '<div class="campos2"><label class="campo">Rol<select name="rol">' + opciones(opcionesRol, 'sucursal') + '</select></label>' +
+          '<label class="campo">Sucursal<select name="sucursal">' + opciones([['', 'Oficina (ninguna)']].concat(L.SUCURSALES.map((s) => [s, s])), '') + '</select></label></div>' +
+          '<p class="nota" style="margin:0 0 6px">La cuenta queda con correo <b>usuario@' + esc((window.CONFIG_PARTTIME || {}).dominio || 'parttime.duckmarket.cl') + '</b>. Cambia la clave después desde la web, si quieres.</p>' +
+          '<div id="perms" style="max-height:36vh;overflow:auto;border-top:1px solid var(--linea);padding-top:4px">' + casillasPermisos([], (k) => mios.indexOf(k) >= 0) + '</div>', {
+          boton: 'Crear usuario',
+          alAbrir: (f) => {
+            const pintar = () => { const adm = f.rol.value === 'admin'; f.querySelectorAll('[data-perm]').forEach((c) => { c.disabled = adm || mios.indexOf(c.dataset.perm) < 0; }); $('#perms', f).style.opacity = adm ? '.45' : '1'; };
+            f.rol.addEventListener('change', () => {
+              const rr = roles.find((x) => x.id === f.rol.value);
+              if (rr) f.querySelectorAll('[data-perm]').forEach((c) => { c.checked = rr.permisos.indexOf(c.dataset.perm) >= 0 && mios.indexOf(c.dataset.perm) >= 0; });
+              pintar();
+            });
+            pintar();
+          },
+          validar: (d, f) => {
+            f.querySelectorAll('[data-perm]:disabled').forEach((c) => { if (c.checked) d['perm_' + c.dataset.perm] = 'on'; });
+            if (d.rol !== 'admin' && !d.sucursal) return 'Elige la sucursal del usuario.';
+            return DB.crearUsuario({ usuario: d.usuario, nombre: d.nombre, clave: d.clave, rol: d.rol, sucursal: d.sucursal || null, permisos: permisosMarcados(d) }).then(() => null);
+          }
+        });
+        if (r) { mensaje('Usuario creado. Ya puede entrar con su usuario y clave.'); vistaUsuarios(v, 'usuarios'); }
+      }
       if (b.dataset.acc === 'editar') {
         const p = lista.find((x) => x.id === b.dataset.id);
         const opcionesRol = (S.perfil.admin ? [['admin', 'Administrador (todo)']] : []).concat(roles.map((r) => [r.id, r.nombre]));

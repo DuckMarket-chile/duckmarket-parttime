@@ -97,6 +97,12 @@
       historial: (f) => todo(() => { let q = sb.from('historial').select('*').order('id', { ascending: false });
         if (f.desde) q = q.gte('cuando', f.desde); return q.limit(f.limite || 2000); }),
       perfiles: () => todo(() => sb.from('perfiles').select('*').order('usuario')),
+      async crearUsuario(u) {
+        const r = await sb.functions.invoke('hyper-action', { body: u });
+        if (r.error) { let m = r.error.message || 'No se pudo crear el usuario'; try { const j = await r.error.context.json(); m = j.error || m; } catch (e) {} throw new Error(m); }
+        if (!r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'No se pudo crear el usuario');
+        return r.data;
+      },
       async guardarPerfil(p) {
         ok(await sb.from('perfiles').update({ nombre: p.nombre, sucursal: p.sucursal || null, rol: p.rol, admin: p.rol === 'admin', permisos: p.rol === 'admin' ? [] : p.permisos, activo: p.activo !== false }).eq('id', p.id));
       },
@@ -258,6 +264,7 @@
       },
       historial: () => { if (!permiso('Historial')) return espera([]); return espera(historial.filter((h) => perfil.admin || ve(h.sucursal) || (!h.sucursal && permiso('VerOtras')))); },
       perfiles: () => { exigir(perfil.admin || permiso('Usuarios')); return espera(perfilesDemo); },
+      async crearUsuario() { throw new Error('En modo de prueba no se crean usuarios.'); },
       async guardarPerfil(p) {
         exigir(perfil.admin || permiso('Usuarios'));
         const v = perfilesDemo.find((x) => x.id === p.id);
