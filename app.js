@@ -69,6 +69,16 @@
   }
   const confirmar = (titulo, txt, boton, peligro) => dialogo(titulo, '<p style="margin:0;white-space:pre-line">' + esc(txt) + '</p>', { boton: boton || 'Sí', peligro }).then((r) => !!r);
 
+  // Informe en Excel de verdad (.xlsx con SheetJS). Sin la librería (sin internet) baja el CSV de siempre.
+  function descargarExcel(nombre, filas) {
+    if (!window.XLSX) return descargarCSV(nombre.replace(/\.xlsx$/, '.csv'), filas);
+    const numero = (c) => (typeof c === 'string' && /^-?\d+(\.\d+)?$/.test(c.trim()) ? Number(c) : c);
+    const datos = filas.map((f) => f.map(numero));
+    const libro = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(libro, window.XLSX.utils.aoa_to_sheet(datos), 'Datos');
+    window.XLSX.writeFile(libro, nombre.replace(/\.csv$/, '.xlsx'));
+  }
+
   function descargarCSV(nombre, filas) {
     const txt = '﻿' + filas.map((f) => f.map((c) => { const s = c == null ? '' : String(c); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(';')).join('\r\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([txt], { type: 'text/csv;charset=utf-8' })); a.download = nombre; document.body.appendChild(a); a.click(); a.remove();
@@ -263,7 +273,7 @@
       }
       if (a === 'asistio') { const p = plan.find((x) => String(x.id) === b.dataset.id); if (await confirmarAsistencia(p, turnosQ)) vistaRegistro(v); }
       if (a === 'noasistio') { const p = plan.find((x) => String(x.id) === b.dataset.id); if (await marcarNoAsistio(p)) vistaRegistro(v); }
-      if (a === 'exportar') descargarCSV('PartTime_' + f + '.csv', [['N°', 'Fecha', 'Sucursal', 'Nombre', 'RUT', 'Entrada', 'Salida', 'Colación', 'Horas', 'Pago', 'Locomoción', 'Total', 'Observación', 'Registrado por']]
+      if (a === 'exportar') descargarExcel('PartTime_' + f + '.csv', [['N°', 'Fecha', 'Sucursal', 'Nombre', 'RUT', 'Entrada', 'Salida', 'Colación', 'Horas', 'Pago', 'Locomoción', 'Total', 'Observación', 'Registrado por']]
         .concat(turnos.map((t) => [t.id, L.fechaTxt(t.fecha), t.sucursal, t.nombre, t.rut, t.entrada, t.salida, t.colacion, L.horasTxt(t.horas), montos() ? t.pago : '', montos() ? t.locomocion : '', montos() ? t.total : '', t.obs, t.creado_por])));
     };
 
@@ -529,7 +539,7 @@
         filas.forEach((f) => { const p = L.buscarPersona(personas, f.nombre, f.rut) || {}; rows.push([f.nombre, f.rut || p.rut, f.sucursales, f.dias, L.horasTxt(f.horas), f.pagos, f.locomocion, f.total, f.pagado, f.saldo, f.estado, p.banco, p.tipo_cuenta, p.cuenta]); });
         rows.push([], ['Detalle por turno'], ['Nombre', 'Fecha', 'Sucursal', 'Entrada', 'Salida', 'Horas', 'Pago', 'Locomoción', 'Total']);
         filas.forEach((f) => f.turnos.forEach((t) => rows.push([f.nombre, L.fechaTxt(t.fecha), t.sucursal, t.entrada, t.salida, L.horasTxt(t.horas), t.pago, t.locomocion, t.total])));
-        descargarCSV('PartTime_Pagos_' + q.clave + '.csv', rows);
+        descargarExcel('PartTime_Pagos_' + q.clave + '.csv', rows);
       }
     };
     const fp = $('#f-pago', v);
@@ -618,7 +628,7 @@
         c.res.sinRespaldo.forEach((x) => rows.push([x.id, L.fechaTxt(x.fecha_pago), x.nombre, x.monto, x.obs]));
         rows.push([], ['Otras transferencias'], ['Fecha', 'ID transacción', 'Destinatario', 'Monto']);
         c.res.otras.forEach((t) => rows.push([L.fechaTxt(t.fecha), t.id, t.destinatario, t.monto]));
-        descargarCSV('Conciliacion_MP_' + c.cart.desde + '_' + c.cart.hasta + '.csv', rows);
+        descargarExcel('Conciliacion_MP_' + c.cart.desde + '_' + c.cart.hasta + '.csv', rows);
       }
     };
   }
@@ -684,7 +694,7 @@
     $('#r-mes', v).onchange = (e) => vistaReportes(v, e.target.value);
     v.onclick = (ev) => {
       if (!ev.target.closest('[data-acc=exportar]')) return;
-      descargarCSV('PartTime_Resumen_' + mes + '.csv', [['Persona', 'Sucursales', 'Turnos', 'Horas', 'Total']].concat(pers.map((x) => [x.nombre, [...x.sucs].join(', '), x.turnos, L.horasTxt(x.horas), montos() ? x.total : ''])));
+      descargarExcel('PartTime_Resumen_' + mes + '.csv', [['Persona', 'Sucursales', 'Turnos', 'Horas', 'Total']].concat(pers.map((x) => [x.nombre, [...x.sucs].join(', '), x.turnos, L.horasTxt(x.horas), montos() ? x.total : ''])));
     };
   }
 
