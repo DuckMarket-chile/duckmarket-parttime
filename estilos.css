@@ -149,3 +149,4 @@ dialog form { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
 .ok { color: #1E7B34; font-weight: 700; }
 .aviso { color: #9A6700; font-weight: 700; }
 .mal { color: #B42318; font-weight: 700; }
+.gris { color: var(--gris); }

@@ -14,6 +14,8 @@
   const planificables = () => !tiene('Planificar') ? [] : (S.perfil.admin || tiene('PlanificarOtras')) ? visibles() : [S.perfil.sucursal].filter(Boolean);
   const montos = () => tiene('VerMontos') || tiene('Pagos');
   const pesoV = (v) => montos() ? L.peso(v) : '—';
+  // variación frente al mes anterior: ▲ sube (rojo), ▼ baja (verde), ► casi igual (gris)
+  const pctFlecha = (p) => p == null ? '—' : (p > 0.5 ? '<span class="mal">▲</span>' : p < -0.5 ? '<span class="ok">▼</span>' : '<span class="gris">►</span>') + ' ' + (p > 0 ? '+' : '') + p.toFixed(1) + '%';
   const hoy = () => L.hoyChile();
   const ICO = {
     tablero: '<rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><rect x="14" y="14" width="7" height="7" rx="1"></rect>',
@@ -711,7 +713,7 @@
     const compHtml = '<section class="caja" style="margin-bottom:14px"><h2>Gasto por local: mes anterior vs este mes</h2>' +
       '<p class="nota" style="margin:0 0 8px">Comparado con el mismo período: del 1 al ' + dActual + ' de ' + L.MESES[am - 1] + ' contra del 1 al ' + dPrev + ' de ' + L.MESES[pAm - 1] + '. Verde: hasta 5% más. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
-      filasComp.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + (x.sem.pct == null ? '—' : (x.sem.pct > 0 ? '+' : '') + x.sem.pct.toFixed(1) + '%') + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
+      filasComp.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
       '</tbody></table></div></section>';
     const porPer = new Map();
     turnos.forEach((t) => { const k = t.nombre; const x = porPer.get(k) || { nombre: k, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); porPer.set(k, x); });
@@ -788,7 +790,7 @@
     const rojos = filas.filter((x) => x.sem.cls === 'mal').length;
     v.innerHTML = cabecera('Tablero', 'Indicadores del mes: gasto por local comparado con el mismo período del mes anterior.') +
       '<section class="tarjetas">' +
-      tarjeta('Gasto de este mes', pesoV(sumAct), tAct.length + ' turnos · al ' + dAct + ' de ' + L.MESES[am - 1]) +
+      tarjeta('Gasto de este mes', pesoV(sumAct), tAct.length + ' turnos · ' + (sumPrev ? pctFlecha((sumAct - sumPrev) / sumPrev * 100) + ' vs mes anterior' : 'sin base de comparación')) +
       tarjeta('Mismo período mes anterior', pesoV(sumPrev), 'del 1 al ' + dPrev + ' de ' + L.MESES[pAm - 1]) +
       tarjeta('Planificado próxima quincena', pesoV(sumPlan), planes.length + ' turnos planificados', true) +
       tarjeta('Locales en rojo', String(rojos), rojos ? 'más de 15% sobre el mes anterior' : 'ninguno', false) +
@@ -796,7 +798,7 @@
       '<section class="caja" style="margin-top:14px"><h2>Gasto por local</h2>' +
       '<p class="nota" style="margin:0 0 8px">Verde: hasta 5% más que el mes anterior. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
-      filas.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + (x.sem.pct == null ? '—' : (x.sem.pct > 0 ? '+' : '') + x.sem.pct.toFixed(1) + '%') + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
+      filas.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
       '</tbody></table></div></section>';
   }
 
