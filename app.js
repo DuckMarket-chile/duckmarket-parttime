@@ -301,6 +301,9 @@
       const t = { id: form.id.value ? Number(form.id.value) : null, fecha: f, sucursal: form.sucursal.value, nombre: per.nombre, rut: per.rut || (e.rut || ''),
         entrada: form.entrada.value, salida: form.salida.value, colacion: L.num(form.colacion.value), pago: L.num(form.pago.value), locomocion: L.num(form.locomocion.value), obs: form.obs.value.trim() };
       if (!t.nombre) return mensaje('Escribe el nombre de la persona.', true);
+      // feriados irrenunciables: no se registran turnos (la base también lo impide)
+      const bloq = (await DB.feriados().catch(() => [])).find((x) => x.fecha === t.fecha && x.bloqueado);
+      if (bloq) return mensaje('No se registran turnos el ' + L.fechaLarga(t.fecha) + ': ' + bloq.nombre + ' (feriado irrenunciable).', true);
       if (L.calcHoras(t.entrada, t.salida, t.colacion) === 0) return mensaje('Revisa el horario: el turno queda en 0 horas.', true);
       if (!t.pago && !(await confirmar('Pago en cero', 'El pago del turno está en $0. ¿Guardar igual?'))) return;
       const repetido = turnos.find((x) => x.id !== t.id && L.normNombre(x.nombre) === L.normNombre(t.nombre) && x.sucursal === t.sucursal);
