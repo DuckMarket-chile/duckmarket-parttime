@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.21.2';
+  const VERSION = '2026.11.21.3';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -16,6 +16,18 @@
   const montos = () => tiene('VerMontos') || tiene('Pagos');
   const pesoV = (v) => montos() ? L.peso(v) : '—';
   // variación frente al mes anterior: ▲ sube (rojo), ▼ baja (verde), ► casi igual (gris)
+  // semáforo de gasto por local (Tablero y Reportes): verde hasta +5%, amarillo hasta +15%, rojo más
+  const LEYENDA_SEMAFORO = 'Verde: hasta 5% más que el mes anterior. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.';
+  const semaforo = (act, ant) => {
+    if (!ant && !act) return { txt: 'Sin gasto', cls: 'gris', pct: null };
+    if (!ant) return { txt: 'Sin base', cls: 'aviso', pct: null };
+    const pct = (act - ant) / ant * 100;
+    if (pct <= 5) return { txt: 'Verde', cls: 'ok', pct };
+    if (pct <= 15) return { txt: 'Amarillo', cls: 'aviso', pct };
+    return { txt: 'Rojo', cls: 'mal', pct };
+  };
+  // filas de la tabla "Gasto por local" (lista de { s, a, b, sem })
+  const filasSemaforo = (lista) => lista.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('');
   const pctFlecha = (p) => p == null ? '—' : (p > 0.5 ? '<span class="mal">▲</span>' : p < -0.5 ? '<span class="ok">▼</span>' : '<span class="gris">►</span>') + ' ' + (p > 0 ? '+' : '') + p.toFixed(1) + '%';
   const hoy = () => L.hoyChile();
   const ICO = {
@@ -704,19 +716,11 @@
     const actDesde = mes + '-01', actHasta = mes + '-' + String(dActual).padStart(2, '0');
     const turnosPrev = await DB.turnos({ desde: prevDesde, hasta: prevHasta });
     const gasto = (lista, s, d1, d2) => lista.filter((t) => t.sucursal === s && t.fecha >= d1 && t.fecha <= d2).reduce((a, t) => a + Number(t.total), 0);
-    const semaforo = (act, ant) => {
-      if (!ant && !act) return { txt: 'Sin gasto', cls: 'gris', pct: null };
-      if (!ant) return { txt: 'Sin base', cls: 'aviso', pct: null };
-      const pct = (act - ant) / ant * 100;
-      if (pct <= 5) return { txt: 'Verde', cls: 'ok', pct };
-      if (pct <= 15) return { txt: 'Amarillo', cls: 'aviso', pct };
-      return { txt: 'Rojo', cls: 'mal', pct };
-    };
     const filasComp = visibles().map((s) => { const a = gasto(turnos, s, actDesde, actHasta), b = gasto(turnosPrev, s, prevDesde, prevHasta); return { s, a, b, sem: semaforo(a, b) }; });
     const compHtml = '<section class="caja" style="margin-bottom:14px"><h2>Gasto por local: mes anterior vs este mes</h2>' +
-      '<p class="nota" style="margin:0 0 8px">Comparado con el mismo período: del 1 al ' + dActual + ' de ' + L.MESES[am - 1] + ' contra del 1 al ' + dPrev + ' de ' + L.MESES[pAm - 1] + '. Verde: hasta 5% más. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
+      '<p class="nota" style="margin:0 0 8px">Comparado con el mismo período: del 1 al ' + dActual + ' de ' + L.MESES[am - 1] + ' contra del 1 al ' + dPrev + ' de ' + L.MESES[pAm - 1] + '. ' + LEYENDA_SEMAFORO + '</p>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
-      filasComp.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
+      filasSemaforo(filasComp) +
       '</tbody></table></div></section>';
     const porPer = new Map();
     turnos.forEach((t) => { const k = t.nombre; const x = porPer.get(k) || { nombre: k, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); porPer.set(k, x); });
@@ -780,14 +784,6 @@
       DB.turnos({ desde: mes + '-01', hasta: h }), DB.turnos({ desde: pMes + '-01', hasta: pMes + '-' + pad2(dPrev) }),
       DB.plan({ desde: sigD, hasta: sigH }).catch(() => []) ]);
     const gasto = (lista, s) => lista.filter((t) => !s || t.sucursal === s).reduce((a, t) => a + Number(t.total), 0);
-    const semaforo = (act, ant) => {
-      if (!ant && !act) return { txt: 'Sin gasto', cls: 'gris', pct: null };
-      if (!ant) return { txt: 'Sin base', cls: 'aviso', pct: null };
-      const pct = (act - ant) / ant * 100;
-      if (pct <= 5) return { txt: 'Verde', cls: 'ok', pct };
-      if (pct <= 15) return { txt: 'Amarillo', cls: 'aviso', pct };
-      return { txt: 'Rojo', cls: 'mal', pct };
-    };
     // part-time del mes: turnos y pagos, de mayor a menor
     const pers = new Map();
     tAct.forEach((t) => { const k = L.normNombre(t.nombre); const x = pers.get(k) || { nombre: t.nombre, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); pers.set(k, x); });
@@ -803,9 +799,9 @@
       tarjeta('Locales en rojo', String(rojos), rojos ? 'más de 15% sobre el mes anterior' : 'ninguno', false) +
       '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Gasto por local</h2>' +
-      '<p class="nota" style="margin:0 0 8px">Verde: hasta 5% más que el mes anterior. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
+      '<p class="nota" style="margin:0 0 8px">' + LEYENDA_SEMAFORO + '</p>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
-      filas.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
+      filasSemaforo(filas) +
       '</tbody></table></div></section>' +
       '<section class="caja" style="margin-top:14px"><h2>Part-time del mes: turnos y pagos</h2>' +
       (ranking.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' +
