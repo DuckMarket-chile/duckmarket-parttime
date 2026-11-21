@@ -2,7 +2,8 @@
 (function () {
   'use strict';
   const L = window.L, DB = window.DB;
-  const VERSION = '0.1.0';
+  // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
+  const VERSION = '2026.11.21.1';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -130,6 +131,7 @@
       catch (ex) { pantallaEntrada(ex.message); }
     });
     f.u.focus();
+    pintarAvisoVersion();
   }
 
   // ================================================================== estructura
@@ -162,7 +164,7 @@
     const rol = S.perfil.admin ? 'Administrador' : nomRol + (S.perfil.sucursal ? ' · ' + S.perfil.sucursal : '');
     document.body.innerHTML = '<div class="app"><nav class="menu" aria-label="Secciones">' +
       '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>Part-Time</span></div></div>' + items.join('') +
-      '<div class="yo"><b>' + esc(S.perfil.usuario) + '</b><span>' + esc(rol) + '</span><button type="button" id="b-clave">Cambiar mi clave</button><button type="button" id="b-salir">Salir</button></div></nav>' +
+      '<div class="yo"><b>' + esc(S.perfil.usuario) + '</b><span>' + esc(rol) + '</span><button type="button" id="b-clave">Cambiar mi clave</button><button type="button" id="b-salir">Salir</button><span class="ver">Versión ' + VERSION + '</span></div></nav>' +
       '<div class="principal"><div class="barra-movil"><button type="button" id="b-menu" aria-label="Abrir menú"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button><b id="tit-movil">Part-Time</b></div>' +
       (DB.demo ? '<div class="aviso-demo">MODO DE PRUEBA · datos de ejemplo, nada se guarda en la base</div>' : '') +
       '<div id="vista"></div></div></div>';
@@ -180,6 +182,7 @@
     $('.menu').addEventListener('click', () => $('.menu').classList.remove('abierto'));
     if (!window.__menuCerrarAfuera) { window.__menuCerrarAfuera = true; document.addEventListener('click', (e) => { const m = document.querySelector('.menu'); if (m && m.classList.contains('abierto') && !e.target.closest('.menu') && !e.target.closest('#b-menu')) m.classList.remove('abierto'); }); }
     window.onhashchange = ir;
+    pintarAvisoVersion();
     ir();
     avisarPendientes();
   }
@@ -975,8 +978,39 @@
     personas: (v) => vistaPersonas(v, '', null), reportes: (v) => vistaReportes(v), historial: (v) => vistaHistorial(v, ''), usuarios: (v) => vistaUsuarios(v),
     buscar: (v) => vistaBuscar(v) };
 
+  // ================================================================== versión y aviso de actualización
+  // Compara la versión que tiene abierta este navegador con version.json del servidor (sin caché).
+  // Si cambió, muestra una franja "Hay una versión nueva" con botón para recargar. Revisa cada 10 minutos
+  // y al volver a la página (celular que estaba en segundo plano).
+  async function revisarVersion() {
+    try {
+      const r = await fetch('version.json?t=' + Date.now(), { cache: 'no-store' });
+      if (!r.ok) return;
+      const nueva = (await r.json()).version;
+      if (!nueva || nueva === VERSION) return;
+      window.__versionNueva = nueva;
+      pintarAvisoVersion();
+    } catch (e) { /* sin conexión: se vuelve a intentar */ }
+  }
+  // la franja se vuelve a pintar cada vez que cambia la pantalla (montar/pantallaEntrada reemplazan el body)
+  function pintarAvisoVersion() {
+    const nueva = window.__versionNueva;
+    if (!nueva || $('#aviso-version')) return;
+    const franja = document.createElement('div');
+    franja.id = 'aviso-version';
+    franja.innerHTML = '<span>Hay una versión nueva de la aplicación (v' + esc(nueva) + ').</span><button type="button" id="b-actualizar">Actualizar</button>';
+    document.body.appendChild(franja);
+    $('#b-actualizar').onclick = () => { location.href = location.pathname + '?v=' + encodeURIComponent(nueva); };
+  }
+  function vigilarVersion() {
+    revisarVersion();
+    setInterval(revisarVersion, 10 * 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') revisarVersion(); });
+  }
+
   // ================================================================== arranque
   window.addEventListener('DOMContentLoaded', async () => {
+    vigilarVersion();
     try { S.perfil = await DB.sesion(); } catch (e) { S.perfil = null; }
     if (S.perfil) montar(); else pantallaEntrada();
   });
