@@ -165,7 +165,9 @@
     $('#b-salir').onclick = async () => { await DB.salir(); S.perfil = null; location.hash = ''; pantallaEntrada(); };
     $('#b-clave').onclick = cambiarClave;
     $('#b-menu').onclick = () => $('.menu').classList.toggle('abierto');
-    $('.menu').addEventListener('click', (e) => { if (e.target.closest('a')) $('.menu').classList.remove('abierto'); });
+    // el menú se cierra al tocar cualquier cosa dentro de él (enlace o botón) y al tocar fuera (fondo oscuro)
+    $('.menu').addEventListener('click', () => $('.menu').classList.remove('abierto'));
+    if (!window.__menuCerrarAfuera) { window.__menuCerrarAfuera = true; document.addEventListener('click', (e) => { const m = document.querySelector('.menu'); if (m && m.classList.contains('abierto') && !e.target.closest('.menu') && !e.target.closest('#b-menu')) m.classList.remove('abierto'); }); }
     window.onhashchange = ir;
     ir();
     avisarPendientes();
