@@ -163,6 +163,13 @@
       (DB.demo ? '<div class="aviso-demo">MODO DE PRUEBA · datos de ejemplo, nada se guarda en la base</div>' : '') +
       '<div id="vista"></div></div></div>';
     $('#b-salir').onclick = async () => { await DB.salir(); S.perfil = null; location.hash = ''; pantallaEntrada(); };
+    // cierre automático tras 30 minutos sin uso (equipos compartidos)
+    window.__ultimaActividad = Date.now();
+    if (!window.__inactividad) {
+      window.__inactividad = true;
+      ['click', 'keydown', 'touchstart', 'scroll'].forEach((ev) => document.addEventListener(ev, () => { window.__ultimaActividad = Date.now(); }, { passive: true }));
+      setInterval(() => { const b = document.querySelector('#b-salir'); if (b && Date.now() - window.__ultimaActividad > 30 * 60 * 1000) { window.__ultimaActividad = Date.now(); b.click(); } }, 60 * 1000);
+    }
     $('#b-clave').onclick = cambiarClave;
     $('#b-menu').onclick = () => $('.menu').classList.toggle('abierto');
     // el menú se cierra al tocar cualquier cosa dentro de él (enlace o botón) y al tocar fuera (fondo oscuro)
@@ -681,6 +688,29 @@
     mes = mes || hoy().slice(0, 7);
     const desde = mes + '-01', hasta = L.iso(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0));
     const [turnos, planes] = await Promise.all([DB.turnos({ desde, hasta }), DB.plan({ desde, hasta })]);
+    // comparación por local: mismo período del mes anterior (si el mes es el actual, hasta hoy)
+    const [ay, am] = mes.split('-').map(Number), ultDia = (y, m) => new Date(y, m, 0).getDate();
+    const pAy = am === 1 ? ay - 1 : ay, pAm = am === 1 ? 12 : am - 1, pMes = pAy + '-' + String(pAm).padStart(2, '0');
+    const diaHoy = mes === hoy().slice(0, 7) ? Number(hoy().slice(8, 10)) : ultDia(ay, am);
+    const dActual = Math.min(diaHoy, ultDia(ay, am)), dPrev = Math.min(diaHoy, ultDia(pAy, pAm));
+    const prevDesde = pMes + '-01', prevHasta = pMes + '-' + String(dPrev).padStart(2, '0');
+    const actDesde = mes + '-01', actHasta = mes + '-' + String(dActual).padStart(2, '0');
+    const turnosPrev = await DB.turnos({ desde: prevDesde, hasta: prevHasta });
+    const gasto = (lista, s, d1, d2) => lista.filter((t) => t.sucursal === s && t.fecha >= d1 && t.fecha <= d2).reduce((a, t) => a + Number(t.total), 0);
+    const semaforo = (act, ant) => {
+      if (!ant && !act) return { txt: 'Sin gasto', cls: 'gris', pct: null };
+      if (!ant) return { txt: 'Sin base', cls: 'aviso', pct: null };
+      const pct = (act - ant) / ant * 100;
+      if (pct <= 5) return { txt: 'Verde', cls: 'ok', pct };
+      if (pct <= 15) return { txt: 'Amarillo', cls: 'aviso', pct };
+      return { txt: 'Rojo', cls: 'mal', pct };
+    };
+    const filasComp = visibles().map((s) => { const a = gasto(turnos, s, actDesde, actHasta), b = gasto(turnosPrev, s, prevDesde, prevHasta); return { s, a, b, sem: semaforo(a, b) }; });
+    const compHtml = '<section class="caja" style="margin-bottom:14px"><h2>Gasto por local: mes anterior vs este mes</h2>' +
+      '<p class="nota" style="margin:0 0 8px">Comparado con el mismo período: del 1 al ' + dActual + ' de ' + L.MESES[am - 1] + ' contra del 1 al ' + dPrev + ' de ' + L.MESES[pAm - 1] + '. Verde: hasta 5% más. Amarillo: entre 5% y 15% más. Rojo: más de 15% más.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
+      filasComp.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + (x.sem.pct == null ? '—' : (x.sem.pct > 0 ? '+' : '') + x.sem.pct.toFixed(1) + '%') + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('') +
+      '</tbody></table></div></section>';
     const porPer = new Map();
     turnos.forEach((t) => { const k = t.nombre; const x = porPer.get(k) || { nombre: k, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); porPer.set(k, x); });
     const porSuc = visibles().map((s) => { const ts = turnos.filter((t) => t.sucursal === s); return { s, n: ts.length, h: ts.reduce((a, t) => a + Number(t.horas), 0), tot: ts.reduce((a, t) => a + Number(t.total), 0) }; });
@@ -691,10 +721,10 @@
     const meses = []; for (let i = 0; i < 12; i++) { const d = new Date(Number(hoy().slice(0, 4)), Number(hoy().slice(5, 7)) - 1 - i, 1); meses.push([L.iso(d).slice(0, 7), L.MESES[d.getMonth()] + ' ' + d.getFullYear()]); }
     const pers = [...porPer.values()].sort((a, b) => b.total - a.total);
     v.innerHTML = cabecera('Reportes', 'Resumen del mes y cumplimiento de la planificación.', '<label class="campo">Mes<select id="r-mes">' + opciones(meses, mes) + '</select></label>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
-      '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
+      compHtml + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><h2>Por persona</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th></tr></thead><tbody>' +
       pers.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td></tr>').join('') +
-      '</tbody></table></div></div><div class="caja"><h2>Asistencia a lo planificado</h2>' + (asis.size ? '<table><thead><tr><th>Persona</th><th class="num">Plan.</th><th class="num">Asistió</th><th class="num">Faltó</th></tr></thead><tbody>' +
+      '</tbody></table></div></div><div class="caja"><h2>Asistencia a lo planificado</h2>' + (asis.size ? '<table class="tarjetas-movil"><thead><tr><th>Persona</th><th class="num">Plan.</th><th class="num">Asistió</th><th class="num">Faltó</th></tr></thead><tbody>' +
         [...asis.values()].sort((a, b) => b.no - a.no || b.plan - a.plan).map((x) => '<tr><td>' + esc(x.nombre) + '</td><td class="num">' + x.plan + '</td><td class="num">' + x.si + '</td><td class="num" style="color:' + (x.no ? 'var(--mal)' : 'inherit') + '">' + x.no + (x.pend ? ' <span class="nota">(' + x.pend + ' sin confirmar)</span>' : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="nota">No hay planificación en este mes.</p>') + '</div></section>';
     $('#r-mes', v).onchange = (e) => vistaReportes(v, e.target.value);
     v.onclick = (ev) => {
@@ -712,17 +742,45 @@
     const x = h.despues || h.antes || {};
     return CAMPOS_VISTOS.filter((k) => k in x && x[k] !== '' && x[k] != null && ['nombre', 'sucursal', 'fecha'].indexOf(k) < 0).map((k) => k + ': ' + fmt(k, x[k])).join(' · ');
   }
-  async function vistaHistorial(v, texto) {
-    const lista = await DB.historial({ desde: L.sumarDias(hoy(), -90) + 'T00:00:00', limite: 1500 });
+  async function vistaHistorial(v, texto, dias) {
+    const d = Number(dias || S.histDias || 90); S.histDias = d;
+    const lista = await DB.historial({ desde: L.sumarDias(hoy(), -d) + 'T00:00:00', limite: 2000 });
     const t = L.normNombre(texto || '');
     const vis = lista.filter((h) => !t || L.normNombre([h.usuario, h.accion, h.sucursal, h.persona, h.ref_id].join(' ')).includes(t)).slice(0, 400);
     const tipo = (a) => /ELIMIN|ANULADO|INASIST|CANCEL/.test(a) ? 'mal' : /MODIF/.test(a) ? 'aviso' : 'ok';
-    v.innerHTML = cabecera('Historial de cambios', 'Todo ingreso, cambio, eliminación y pago queda anotado automáticamente y no se puede borrar. Últimos 90 días.') +
-      '<section class="zona"><div class="caja"><label class="campo"><span class="sr">Buscar</span><input type="search" id="h-txt" placeholder="Buscar por persona, usuario, acción o sucursal" value="' + esc(texto || '') + '"></label>' +
+    v.innerHTML = cabecera('Historial de cambios', 'Todo ingreso, cambio, eliminación y pago queda anotado automáticamente y no se puede borrar.') +
+      '<section class="zona"><div class="caja"><div class="botones"><label class="campo"><span class="sr">Período</span><select id="h-dias">' + [30, 90, 365].map((n) => '<option value="' + n + '"' + (n === d ? ' selected' : '') + '>Últimos ' + n + ' días</option>').join('') + '</select></label>' + (S.perfil.admin ? '<button class="btn" id="h-rev" type="button">Revisar datos</button>' : '') + '</div><label class="campo"><span class="sr">Buscar</span><input type="search" id="h-txt" placeholder="Buscar por persona, usuario, acción o sucursal" value="' + esc(texto || '') + '"></label>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Cuándo</th><th>Usuario</th><th>Acción</th><th>Sucursal</th><th>Persona</th><th>Detalle</th></tr></thead><tbody>' +
       vis.map((h) => { const d = new Date(h.cuando); return '<tr><td class="gris" data-t="Cuándo" style="white-space:nowrap">' + d.toLocaleDateString('es-CL') + ' ' + d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) + '</td><td data-t="Usuario">' + esc(h.usuario) + '</td><td data-t="Acción">' + est(h.accion, tipo(h.accion)) + '</td><td data-t="Sucursal">' + esc(h.sucursal) + '</td><td class="fuerte" data-t="Persona">' + esc(h.persona) + (h.fecha_reg ? '<div class="nota">' + L.fechaTxt(h.fecha_reg) + '</div>' : '') + '</td><td data-t="Detalle" style="font-size:13px;max-width:460px">' + esc(detalleHist(h)) + '</td></tr>'; }).join('') +
       '</tbody></table>' + (vis.length ? '' : '<div class="vacio">Sin movimientos.</div>') + '</div></div></section>';
+    $('#h-dias', v).onchange = (e) => vistaHistorial(v, $('#h-txt', v).value, Number(e.target.value));
+    if ($('#h-rev', v)) $('#h-rev', v).onclick = () => revisarDatos();
     let tt; $('#h-txt', v).oninput = (e) => { clearTimeout(tt); tt = setTimeout(() => vistaHistorial(v, e.target.value).then(() => { const i = $('#h-txt', v); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }), 300); };
+  }
+
+  const fechaCorta = (s) => { const [y, m, d] = String(s).split('-'); return d + '-' + m + '-' + y; };
+  // revisión para la administración: registros que conviene mirar (último año)
+  async function revisarDatos() {
+    const desde = L.sumarDias(hoy(), -365);
+    const [ts, ps] = await Promise.all([DB.turnos({ desde }), DB.personas().catch(() => [])]);
+    const conocidos = new Set();
+    ps.forEach((p) => { conocidos.add(L.normNombre(p.nombre)); String(p.variantes || '').split('|').forEach((x) => { if (x.trim()) conocidos.add(L.normNombre(x)); }); });
+    const vistos = new Set(), avisos = [];
+    for (const t of ts) {
+      const k = t.fecha + '|' + t.sucursal + '|' + L.normNombre(t.nombre);
+      const motivos = [];
+      if (vistos.has(k)) motivos.push('Repetido el mismo día y sucursal');
+      vistos.add(k);
+      if (Number(t.pago) + Number(t.locomocion) === 0) motivos.push('Sin pago ni locomoción');
+      if (L.calcHoras(t.entrada, t.salida, t.colacion) > 14) motivos.push('Más de 14 horas');
+      if (!conocidos.has(L.normNombre(t.nombre))) motivos.push('Persona que no está en la base');
+      motivos.forEach((m) => avisos.push([t.fecha, t.sucursal, t.nombre, m]));
+    }
+    const filas = avisos.slice(0, 200).map((a) => '<tr><td>' + esc(fechaCorta(a[0])) + '</td><td>' + esc(a[1]) + '</td><td>' + esc(a[2]) + '</td><td>' + esc(a[3]) + '</td></tr>').join('');
+    const html = avisos.length
+      ? '<p class="nota" style="margin:0 0 8px">' + avisos.length + ' aviso(s) en el último año. Solo se muestra; no se cambia nada.</p><div class="tabla-caja"><table><thead><tr><th>Fecha</th><th>Sucursal</th><th>Persona</th><th>Motivo</th></tr></thead><tbody>' + filas + '</tbody></table></div>'
+      : '<p style="margin:0">No hay registros para revisar en el último año.</p>';
+    await dialogo('Revisar datos', html, { boton: 'Cerrar', sinCancelar: true });
   }
 
   // ================================================================== USUARIOS Y ROLES
