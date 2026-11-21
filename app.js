@@ -114,7 +114,7 @@
   function pantallaEntrada(error) {
     window.onhashchange = null;
     document.body.innerHTML = '<main class="login"><form autocomplete="on">' +
-      '<div class="marca"><div class="logo">D</div><div><b>Duck Market</b><span>Registro Part-Time</span></div></div>' +
+      '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>Registro Part-Time</span></div></div>' +
       (DB.demo ? '<div class="error" style="background:var(--avisof);color:var(--aviso)">MODO DE PRUEBA: datos de ejemplo, no se guarda nada. Entra como admin, gerente, andes, encinas o sanmartin con cualquier clave.</div>' : '') +
       '<label class="campo">Usuario<input name="u" autocomplete="username" required autocapitalize="none"></label>' +
       '<label class="campo">Clave<input name="c" type="password" autocomplete="current-password" required></label>' +
@@ -157,7 +157,7 @@
     const nomRol = { admin: 'Administrador', gerente: 'Gerente', sucursal: 'Sucursal' }[S.perfil.rol] || S.perfil.rol || '';
     const rol = S.perfil.admin ? 'Administrador' : nomRol + (S.perfil.sucursal ? ' · ' + S.perfil.sucursal : '');
     document.body.innerHTML = '<div class="app"><nav class="menu" aria-label="Secciones">' +
-      '<div class="marca"><div class="logo">D</div><div><b>Duck Market</b><span>Part-Time</span></div></div>' + items.join('') +
+      '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>Part-Time</span></div></div>' + items.join('') +
       '<div class="yo"><b>' + esc(S.perfil.usuario) + '</b><span>' + esc(rol) + '</span><button type="button" id="b-clave">Cambiar mi clave</button><button type="button" id="b-salir">Salir</button></div></nav>' +
       '<div class="principal"><div class="barra-movil"><button type="button" id="b-menu" aria-label="Abrir menú"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button><b id="tit-movil">Part-Time</b></div>' +
       (DB.demo ? '<div class="aviso-demo">MODO DE PRUEBA · datos de ejemplo, nada se guarda en la base</div>' : '') +
