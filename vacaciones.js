@@ -455,6 +455,7 @@
 
   // ================================================================== reemplazos (solo administración)
   const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const TIPOS_REEM = { INTERNO: 'Interno (del local)', PARTTIME: 'Part-time (de la base)', CONTRATADO: 'Con contrato' };
   // días del período en que se asigna reemplazo: lunes a sábado, sin feriados (el domingo no se trabaja)
   function diasAsignables(s) {
     const out = [];
