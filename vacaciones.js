@@ -420,6 +420,13 @@
         }));
         render(); return;
       }
+      if (acc === 'reem-todos' || acc === 'reem-solo') {
+        const form = $('#reem-form', st.v);
+        const origen = form.querySelector('[data-dia="' + b.dataset.dia + '"]');
+        aplicarPlantilla(form, origen, JSON.parse(decodeURIComponent(b.dataset.plant)), acc === 'reem-todos');
+        form.querySelectorAll('#reem-aviso').forEach((x) => x.remove());
+        return;
+      }
       if (acc === 'reem-guardar') {
         const s = st.sol.find((x) => x.id === st.reemAbierta);
         const n = await guardarReemplazos(s, $('#reem-form', st.v));
@@ -492,34 +499,39 @@
     return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + dv;
   }
   // lo que se elige en un día se copia a los demás días. Los vacíos se completan solos; si otros días ya tienen
-  // otro reemplazo, se pregunta si también se cambian (Aceptar = todos; Cancelar = solo este día y los vacíos)
+  // otro reemplazo, un aviso dentro del formulario pregunta si también se cambian (Cambiar todos / Solo este día)
+  function aplicarPlantilla(form, fila, plantilla, sobrescribir) {
+    const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
+    form.querySelectorAll('[data-dia]').forEach((o) => {
+      if (o === fila) return;
+      const tipoOtra = leer(o, 'tipo');
+      const reemplazar = sobrescribir && tipoOtra;
+      if (tipoOtra && tipoOtra !== plantilla.tipo && !reemplazar) return;
+      Object.keys(plantilla).forEach((k) => {
+        const x = o.querySelector('[data-campo="' + k + '"]');
+        if (!x) return;
+        if (reemplazar || (!x.value && plantilla[k])) x.value = plantilla[k];
+      });
+      mostrarCampos(o); ajustarHasta(o);
+    });
+  }
   function propagarPlantilla(fila) {
     const form = fila.closest('#reem-form');
     if (!form) return;
     const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
     const plantilla = { tipo: leer(fila, 'tipo'), persona: leer(fila, 'persona'), nombre: leer(fila, 'nombre'), rut: leer(fila, 'rut'), desde: leer(fila, 'desde'), hasta: leer(fila, 'hasta') };
     if (!plantilla.tipo) return;
-    const otras = [...form.querySelectorAll('[data-dia]')].filter((o) => o !== fila);
-    const distintas = otras.filter((o) => {
-      if (!leer(o, 'tipo')) return false;
-      return Object.keys(plantilla).some((k) => leer(o, k) !== plantilla[k]);
-    });
-    const cambiarTodos = distintas.length > 0 && window.confirm(
-      'Ya hay ' + distintas.length + ' día(s) con otro reemplazo.\n\n' +
-      '¿Cambiarlos también a este reemplazo?\n\n' +
-      'Aceptar: cambia todos los días.\n' +
-      'Cancelar: solo cambia este día y completa los vacíos.');
-    otras.forEach((o) => {
-      const tipoOtra = leer(o, 'tipo');
-      const sobrescribir = cambiarTodos && tipoOtra;
-      if (tipoOtra && tipoOtra !== plantilla.tipo && !sobrescribir) return;
-      Object.keys(plantilla).forEach((k) => {
-        const x = o.querySelector('[data-campo="' + k + '"]');
-        if (!x) return;
-        if (sobrescribir || (!x.value && plantilla[k])) x.value = plantilla[k];
-      });
-      mostrarCampos(o); ajustarHasta(o);
-    });
+    form.querySelectorAll('#reem-aviso').forEach((x) => x.remove());
+    const distintas = [...form.querySelectorAll('[data-dia]')].filter((o) => o !== fila && leer(o, 'tipo') &&
+      Object.keys(plantilla).some((k) => leer(o, k) !== plantilla[k])).length;
+    if (!distintas) { aplicarPlantilla(form, fila, plantilla, false); return; }
+    const aviso = document.createElement('div');
+    aviso.id = 'reem-aviso';
+    aviso.setAttribute('style', 'margin:10px 0;padding:12px;border:1px solid #f0d28a;background:#fff8e6;border-radius:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:14px');
+    aviso.innerHTML = '<span>Ya hay ' + distintas + ' día(s) con otro reemplazo. ¿Cambiarlos también a este?</span>' +
+      '<button type="button" class="btn ama chico" data-acc="reem-todos" data-dia="' + fila.dataset.dia + '" data-plant="' + encodeURIComponent(JSON.stringify(plantilla)) + '">Cambiar todos</button>' +
+      '<button type="button" class="btn chico" data-acc="reem-solo" data-dia="' + fila.dataset.dia + '" data-plant="' + encodeURIComponent(JSON.stringify(plantilla)) + '">Solo este día</button>';
+    form.insertBefore(aviso, form.firstChild);
   }
   // "hasta" no puede ser anterior a "desde"
   function ajustarHasta(fila) {
