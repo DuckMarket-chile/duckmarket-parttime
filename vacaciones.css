@@ -71,3 +71,5 @@
   .comp-area, .comp-area * { visibility: visible; }
   .comp-area { position: absolute; left: 0; top: 0; width: 100%; border: 0; max-width: none; padding: 12mm; }
 }
+
+.reem-fila [hidden] { display: none !important; }

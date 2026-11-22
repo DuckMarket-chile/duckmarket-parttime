@@ -16,13 +16,11 @@
   const sumaD = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const fmt = (d) => d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' });
   const habil = (d) => d.getDay() >= 1 && d.getDay() <= 5 && !st.feriados.has(iso(d));
-  // mismas reglas que la base (vac_fin / vac_retorno / vac_inicio_valido): solo para mostrar antes de enviar
+  // mismas reglas que la base (vac_fin / vac_retorno / vac_inicio_valido, migración 17): solo para mostrar antes de enviar
   function fin(ini, dias) { let d = new Date(ini), n = 1; while (n < dias) { d = sumaD(d, 1); if (habil(d)) n++; } return d; }
-  function retorno(f) { let d = sumaD(f, 1); while (d.getDay() === 0 || st.feriados.has(iso(d))) d = sumaD(d, 1); return d; }
+  function retorno(f) { let d = sumaD(f, 1); while (!habil(d)) d = sumaD(d, 1); return d; }
   function inicioValido(s) {
-    const d = dDe(s), dow = d.getDay();
-    const dia = dow === 1 || (dow === 2 && st.feriados.has(iso(sumaD(d, -1))));
-    return dia && !st.feriados.has(s) && s >= '2026-12-01' && s <= '2027-03-31';
+    return habil(dDe(s)) && s >= '2026-12-01' && s <= '2027-03-31';
   }
 
   // ================================================================== acceso y datos
@@ -57,6 +55,7 @@
     st.feriados = new Set(feriados.map((f) => f.fecha));
     st.ruts = {};
     if (esDirectivo()) (await leer('vac_personal_rut')).forEach((x) => { st.ruts[x.personal_id] = x.rut; });
+    st.reemplazos = await leer(esDirectivo() ? 'vac_reemplazos' : 'vac_reemplazos_vista');
     if (!st.local || localesVisibles().indexOf(st.local) < 0) st.local = localesVisibles()[0];
   }
 
@@ -142,7 +141,7 @@
     return '<form id="vac-form" class="vac-form" novalidate>' +
       '<label class="campo"><span>Persona</span><select id="f-per">' + pers.map((p) => '<option value="' + p.id + '">' + esc(p.nombre) + ' · ' + esc(p.cargo) + '</option>').join('') + '</select></label>' +
       '<div id="f-pue-caja"></div>' +
-      '<label class="campo"><span>Inicio (lunes)</span><input id="f-ini" type="date" min="2026-12-01" max="2027-03-31"></label>' +
+      '<label class="campo"><span>Inicio (día hábil)</span><input id="f-ini" type="date" min="2026-12-01" max="2027-03-31"></label>' +
       '<label class="campo"><span>Días hábiles (1 a 30, lo normal es 10 a 15)</span><input id="f-dias" type="number" min="1" max="30" step="1" inputmode="numeric" value="15"></label>' +
       '<p id="f-vista" class="vac-nota"></p><p id="f-err" class="vac-error"></p>' +
       '<div class="botones"><button class="btn ama" type="submit">Enviar a aprobación</button></div></form>' +
@@ -170,7 +169,7 @@
     const f = $('#f-ini'), v = $('#f-vista'), dias = diasEscritos();
     if (!f || !f.value) { v.textContent = ''; return; }
     if (dias === null) { v.textContent = 'Escribe una cantidad de días entre 1 y 30.'; return; }
-    if (!inicioValido(f.value)) { v.textContent = 'El inicio debe ser lunes (o martes si el lunes es feriado), no feriado, entre el 01-12-2026 y el 31-03-2027.'; return; }
+    if (!inicioValido(f.value)) { v.textContent = 'El inicio debe ser un día hábil (lunes a viernes, sin feriado), entre el 01-12-2026 y el 31-03-2027.'; return; }
     const d = dDe(f.value), fn = fin(d, dias), rt = retorno(fn);
     v.textContent = dias + ' días hábiles: del ' + fmt(d) + ' al ' + fmt(fn) + ' · retorno ' + fmt(rt) + ' · La base revisa cruces con otras solicitudes antes de guardar.';
   }
@@ -271,6 +270,11 @@
         '<button type="button" class="btn chico" data-acc="comp-ver" data-id="' + s2.id + '">Ver comprobante</button></li>';
     }).join('') + '</ul>';
   }
+  // cuenta los sábados y domingos entre el inicio y el fin (ambos incluidos)
+  function finDeSemanaEn(ini, fi) {
+    let n = 0; for (let d = dDe(ini), h = dDe(fi); d <= h; d = sumaD(d, 1)) if (d.getDay() === 0 || d.getDay() === 6) n++;
+    return n;
+  }
   // comprobante: un documento por solicitud aprobada (se imprime o se guarda como PDF)
   function comprobanteHtml(id) {
     const s2 = st.sol.find((x) => x.id === id);
@@ -289,6 +293,7 @@
         fila('Período que se descuenta (anualidad)', p.periodo_inicio ? f(p.periodo_inicio) + ' al ' + f(p.periodo_fin) : '') +
         fila('Fechas de las vacaciones', f(s2.inicio) + ' al ' + f(s2.fin)) +
         fila('Días hábiles tomados', s2.dias) +
+        fila('Sábados y domingos dentro del período', finDeSemanaEn(s2.inicio, s2.fin)) +
         fila('Retorno al trabajo', f(s2.retorno)) +
         fila('Saldo de días antes de esta solicitud', saldoAntes != null ? saldoAntes.toFixed(1) : '') +
         fila('Saldo de días después', saldoDespues) +
@@ -385,10 +390,11 @@
   const PESTANAS = [['resumen', 'Resumen'], ['local', 'Calendario por local'], ['general', 'Vista general'], ['solicitud', 'Nueva solicitud'], ['aprobacion', 'Aprobaciones'], ['reportes', 'Reportes'], ['comprobantes', 'Comprobantes']];
   function render() {
     const v = st.v; if (!v) return;
-    const contenido = st.tab === 'comprobantes' ? vistaComprobantes() : st.tab === 'resumen' ? vistaResumen() : st.tab === 'local' ? vistaLocal() : st.tab === 'general' ? vistaGeneral() : st.tab === 'solicitud' ? vistaSolicitud() : st.tab === 'reportes' ? vistaReportes() : vistaAprobacion();
+    const contenido = st.tab === 'comprobantes' ? vistaComprobantes() : st.tab === 'resumen' ? vistaResumen() : st.tab === 'local' ? vistaLocal() : st.tab === 'general' ? vistaGeneral() : st.tab === 'solicitud' ? vistaSolicitud() : st.tab === 'reportes' ? vistaReportes() : st.tab === 'reemplazos' ? vistaReemplazos() : vistaAprobacion();
     // las secciones se eligen desde el menú lateral: aquí solo se muestra la sección y sus avisos
     v.innerHTML = (st.aviso ? '<p class="vac-ok">' + esc(st.aviso) + '</p>' : '') + (st.error ? '<p class="vac-error">' + esc(st.error) + '</p>' : '') +
       '<section class="zona">' + contenido + '</section>';
+    v.querySelectorAll('[data-dia]').forEach(mostrarCampos);
     st.aviso = ''; st.error = '';
     const f = $('#f-ini'); if (f) { f.addEventListener('input', previsualizar); $('#f-dias').addEventListener('input', previsualizar); previsualizar(); }
     const form = $('#vac-form'); if (form) form.addEventListener('submit', enviarSolicitud);
@@ -402,6 +408,25 @@
       if (acc === 'rep-excel') { exportarReporte(); return; }
       if (acc === 'comp-ver') { st.comp = Number(b.dataset.id); render(); return; }
       if (acc === 'comp-volver') { st.comp = null; render(); return; }
+      if (acc === 'reem-abrir') {
+        const id = Number(b.dataset.id);
+        if (st.reemAbierta === id) { st.reemAbierta = null; render(); return; }
+        const s = st.sol.find((x) => x.id === id);
+        st.reemAbierta = id; st.reemPre = {};
+        if (!st.partime) st.partime = await leerPersonas();
+        await Promise.all(diasAsignables(s).map(async (f) => {
+          const r = await st.sb.rpc('vac_horario_precargado', { p_personal_id: s.personal_id, p_fecha: f });
+          if (!r.error && r.data && r.data[0]) st.reemPre[f] = r.data[0];
+        }));
+        render(); return;
+      }
+      if (acc === 'reem-guardar') {
+        const s = st.sol.find((x) => x.id === st.reemAbierta);
+        const n = await guardarReemplazos(s, $('#reem-form', st.v));
+        await cargar();
+        st.aviso = n ? 'Reemplazos guardados (' + n + ' cambio' + (n === 1 ? '' : 's') + ').' : 'No había cambios que guardar.';
+        render(); return;
+      }
       if (acc === 'comp-imprimir') { window.print(); return; }
       if (acc === 'rep-imprimir') { window.print(); return; }
       if (acc === 'aprobar') {
@@ -425,6 +450,106 @@
       }
       await cargar(); render();
     } catch (e) { st.error = e.message; render(); }
+  }
+
+
+  // ================================================================== reemplazos (solo administración)
+  const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  // días del período en que se asigna reemplazo: lunes a sábado, sin feriados (el domingo no se trabaja)
+  function diasAsignables(s) {
+    const out = [];
+    for (let d = dDe(s.inicio), h = dDe(s.fin); d <= h; d = sumaD(d, 1)) {
+      if (d.getDay() !== 0 && !st.feriados.has(iso(d))) out.push(iso(d));
+    }
+    return out;
+  }
+  function reemDe(sid, fecha) { return (st.reemplazos || []).find((r) => r.solicitud_id === sid && r.fecha === fecha) || null; }
+  async function leerPersonas() {
+    const r = await st.sb.from('personas_lista').select('id,nombre,rut,activo');
+    if (r.error) throw new Error(r.error.message);
+    return r.data || [];
+  }
+  // muestra solo los campos que corresponden al tipo elegido en la fila
+  function mostrarCampos(fila) {
+    const tipo = fila.querySelector('[data-campo="tipo"]').value;
+    fila.querySelectorAll('[data-solo]').forEach((el) => { el.hidden = el.dataset.solo.split(' ').indexOf(tipo) < 0; });
+  }
+  function formularioReemplazos(s) {
+    const dias = diasAsignables(s), pre = st.reemPre || {};
+    const internos = st.personal.filter((p) => p.local === s.local && p.activo !== false && p.id !== s.personal_id);
+    const partime = (st.partime || []).filter((p) => p.activo !== false);
+    const opciones = (sel) =>
+      '<option value="">Elegir…</option>' +
+      '<optgroup label="Del local (' + esc(s.local) + ')">' + internos.map((p) => '<option value="I:' + p.id + '"' + (sel === 'I:' + p.id ? ' selected' : '') + '>' + esc(p.nombre) + '</option>').join('') + '</optgroup>' +
+      '<optgroup label="Part-time (de la base)">' + partime.map((p) => '<option value="P:' + p.id + '"' + (sel === 'P:' + p.id ? ' selected' : '') + '>' + esc(p.nombre) + '</option>').join('') + '</optgroup>';
+    const filas = dias.map((f) => {
+      const ex = reemDe(s.id, f), d = dDe(f);
+      const tipo = ex ? ex.tipo : '';
+      const sel = ex ? (ex.tipo === 'INTERNO' ? 'I:' + ex.personal_id : ex.tipo === 'PARTTIME' ? 'P:' + ex.persona_id : '') : '';
+      const ent = ex ? ex.entrada : (pre[f] ? String(pre[f].entrada).slice(0, 5) : '');
+      const sal = ex ? ex.salida : (pre[f] ? String(pre[f].salida).slice(0, 5) : '');
+      const campo = (txt, solo, html) => '<label data-solo="' + solo + '" style="display:flex;flex-direction:column;gap:4px;font-size:12px">' + txt + html + '</label>';
+      return '<div class="reem-fila" data-dia="' + f + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid #eceff4">' +
+        '<div style="font-size:13px"><b>' + DIAS_CORTO[d.getDay()] + ' ' + d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }) + '</b></div>' +
+        campo('Tipo', '', '<select data-campo="tipo"><option value="">Sin reemplazo</option>' + Object.keys(TIPOS_REEM).map((k) => '<option value="' + k + '"' + (tipo === k ? ' selected' : '') + '>' + TIPOS_REEM[k] + '</option>').join('') + '</select>') +
+        campo('Persona', 'INTERNO PARTTIME', '<select data-campo="persona">' + opciones(sel) + '</select>') +
+        campo('Nombre', 'CONTRATADO', '<input type="text" data-campo="nombre" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.nombre : '') + '">') +
+        campo('RUT', 'CONTRATADO', '<input type="text" data-campo="rut" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.rut : '') + '">') +
+        campo('Contrato desde', 'CONTRATADO', '<input type="date" data-campo="desde" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.contrato_desde : '') + '">') +
+        campo('Contrato hasta', 'CONTRATADO', '<input type="date" data-campo="hasta" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.contrato_hasta : '') + '">') +
+        campo('Entrada', '', '<input type="time" data-campo="entrada" value="' + esc(ent) + '">') +
+        campo('Salida', '', '<input type="time" data-campo="salida" value="' + esc(sal) + '">') +
+        '</div>';
+    }).join('');
+    return '<div id="reem-form" style="margin-top:12px"><p class="vac-nota">El horario viene precargado del último turno de ' + esc(nombrePersona(s.personal_id)) + ' para ese día de la semana. Cámbialo si corresponde. Un día sin tipo queda sin reemplazo.</p>' +
+      filas + '<div style="margin-top:12px"><button type="button" class="btn ama" data-acc="reem-guardar">Guardar reemplazos</button></div></div>';
+  }
+  function vistaReemplazos() {
+    if (!st.acceso || st.acceso.rol !== 'administracion') return '<p class="vac-nota">Solo administración asigna reemplazos.</p>';
+    const aprob = st.sol.filter((s) => s.estado === 'aprobada').sort((a, b) => a.inicio.localeCompare(b.inicio));
+    if (!aprob.length) return '<p class="vac-nota">Aún no hay solicitudes aprobadas.</p>';
+    return '<ul class="vac-lista">' + aprob.map((s) => {
+      const dias = diasAsignables(s), hechos = dias.filter((f) => reemDe(s.id, f)).length;
+      const abierta = st.reemAbierta === s.id;
+      return '<li><b>' + esc(nombrePersona(s.personal_id)) + '</b> · ' + esc(s.local) + '<br>' +
+        '<span class="vac-nota">' + dDe(s.inicio).toLocaleDateString('es-CL') + ' al ' + dDe(s.fin).toLocaleDateString('es-CL') + ' · reemplazos: ' + hechos + ' de ' + dias.length + ' días</span><br>' +
+        '<button type="button" class="btn chico" data-acc="reem-abrir" data-id="' + s.id + '">' + (abierta ? 'Cerrar' : 'Asignar reemplazos') + '</button>' +
+        (abierta ? formularioReemplazos(s) : '') + '</li>';
+    }).join('') + '</ul>';
+  }
+  // lee las filas del formulario y las guarda: primero borra, luego cambia, luego agrega
+  async function guardarReemplazos(s, box) {
+    const cambios = [];
+    box.querySelectorAll('[data-dia]').forEach((fila) => {
+      const f = fila.dataset.dia, ex = reemDe(s.id, f);
+      const c = (k) => { const el = fila.querySelector('[data-campo="' + k + '"]'); return el ? el.value.trim() : ''; };
+      const tipo = c('tipo');
+      if (!tipo) { if (ex) cambios.push({ f, op: 'delete', id: ex.id }); return; }
+      const row = { solicitud_id: s.id, fecha: f, tipo: tipo, personal_id: null, persona_id: null, nombre: '', rut: '', contrato_desde: null, contrato_hasta: null, entrada: c('entrada'), salida: c('salida') };
+      if (!/^\d{2}:\d{2}$/.test(row.entrada) || !/^\d{2}:\d{2}$/.test(row.salida)) throw new Error('El día ' + f + ' necesita entrada y salida.');
+      if (tipo === 'INTERNO' || tipo === 'PARTTIME') {
+        const v = c('persona');
+        if (!v) throw new Error('Elige la persona del día ' + f + '.');
+        const [pre, id] = v.split(':');
+        if (pre === 'I') row.personal_id = Number(id); else row.persona_id = Number(id);
+      } else {
+        row.nombre = c('nombre'); row.rut = c('rut'); row.contrato_desde = c('desde') || null; row.contrato_hasta = c('hasta') || null;
+        if (!row.nombre || !row.rut || !row.contrato_desde || !row.contrato_hasta) throw new Error('El contratado del día ' + f + ' necesita nombre, RUT y fechas del contrato.');
+      }
+      cambios.push({ f, op: ex ? 'update' : 'insert', id: ex ? ex.id : null, row });
+    });
+    const orden = { delete: 0, update: 1, insert: 2 };
+    cambios.sort((a, b) => orden[a.op] - orden[b.op]);
+    let n = 0;
+    for (const c of cambios) {
+      let r;
+      if (c.op === 'delete') r = await st.sb.from('vac_reemplazos').delete().eq('id', c.id);
+      else if (c.op === 'update') r = await st.sb.from('vac_reemplazos').update(c.row).eq('id', c.id);
+      else r = await st.sb.from('vac_reemplazos').insert(c.row);
+      if (r.error) throw new Error('Día ' + c.f + ': ' + r.error.message + '. Los cambios anteriores a ese día sí quedaron guardados.');
+      n++;
+    }
+    return n;
   }
 
   // ================================================================== API para app.js
@@ -460,6 +585,7 @@
         v.dataset.listo = '1';
         v.addEventListener('click', accion);
         v.addEventListener('change', (ev) => {
+          if (ev.target.dataset && ev.target.dataset.campo === 'tipo') { mostrarCampos(ev.target.closest('[data-dia]')); return; }
           if (ev.target.id && ev.target.id.indexOf('rep-') === 0) { cambiarReporte(ev.target); return; }
           if (ev.target.id === 'vac-mes') { st.mes = Number(ev.target.value); render(); }
           if (ev.target.id === 'vac-loc') { st.local = ev.target.value; render(); }

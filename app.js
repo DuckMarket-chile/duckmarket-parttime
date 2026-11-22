@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.21.11';
+  const VERSION = '2026.11.22.2';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -42,7 +42,7 @@
     historial: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
     usuarios: '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 018 0v4"></path>',
     buscar: '<circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>',
-    respaldo: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path>', 'vac-publicar': '<path d="M12 19V5M5 12l7-7 7 7"></path>', 'vac-resumen': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-calendario': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-general': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-solicitud': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-aprobacion': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-reportes': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>', 'vac-comprobantes': '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path>'
+    respaldo: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path>', 'vac-publicar': '<path d="M12 19V5M5 12l7-7 7 7"></path>', 'vac-resumen': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-calendario': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-general': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-solicitud': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-aprobacion': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-reportes': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>', 'vac-reemplazos': '<path d="M7 16V4M3 8l4-4 4 4M17 8v12M13 16l4 4 4-4"></path>', 'vac-comprobantes': '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path>'
   };
   const icono = (n, t) => '<svg aria-hidden="true" width="' + (t || 18) + '" height="' + (t || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICO[n] + '</svg>';
   const est = (txt, tipo) => '<span class="est ' + tipo + '">' + esc(txt) + '</span>';
@@ -170,6 +170,7 @@
     { id: 'vac-general', txt: 'Vista general', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-solicitud', txt: 'Nueva solicitud', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-aprobacion', txt: 'Aprobaciones', ve: () => !!S.vacAcceso && VACDIR() },
+    { id: 'vac-reemplazos', txt: 'Reemplazos', ve: () => !!S.vacAcceso && S.vacAcceso.rol === 'administracion' },
     { id: 'vac-reportes', txt: 'Reportes', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-comprobantes', txt: 'Comprobantes', ve: () => !!S.vacAcceso && VACDIR() }
   ];
@@ -1005,7 +1006,7 @@
     buscar: (v) => vistaBuscar(v),
     'vac-resumen': (v) => window.VAC.vista(v, 'resumen'), 'vac-calendario': (v) => window.VAC.vista(v, 'local'),
     'vac-general': (v) => window.VAC.vista(v, 'general'), 'vac-solicitud': (v) => window.VAC.vista(v, 'solicitud'),
-    'vac-aprobacion': (v) => window.VAC.vista(v, 'aprobacion'), 'vac-reportes': (v) => window.VAC.vista(v, 'reportes'),
+    'vac-aprobacion': (v) => window.VAC.vista(v, 'aprobacion'), 'vac-reportes': (v) => window.VAC.vista(v, 'reportes'), 'vac-reemplazos': (v) => window.VAC.vista(v, 'reemplazos'),
     'vac-comprobantes': (v) => window.VAC.vista(v, 'comprobantes'), 'vac-publicar': (v) => window.VAC.vistaPublicar(v), respaldo: (v) => vistaRespaldo(v) };
 
   // ================================================================== respaldo de datos (solo administración)
