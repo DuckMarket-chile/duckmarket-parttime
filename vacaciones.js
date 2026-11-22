@@ -394,7 +394,7 @@
     // las secciones se eligen desde el menú lateral: aquí solo se muestra la sección y sus avisos
     v.innerHTML = (st.aviso ? '<p class="vac-ok">' + esc(st.aviso) + '</p>' : '') + (st.error ? '<p class="vac-error">' + esc(st.error) + '</p>' : '') +
       '<section class="zona">' + contenido + '</section>';
-    v.querySelectorAll('[data-dia]').forEach(mostrarCampos);
+    v.querySelectorAll('[data-dia]').forEach((fila) => { mostrarCampos(fila); ajustarHasta(fila); });
     st.aviso = ''; st.error = '';
     const f = $('#f-ini'); if (f) { f.addEventListener('input', previsualizar); $('#f-dias').addEventListener('input', previsualizar); previsualizar(); }
     const form = $('#vac-form'); if (form) form.addEventListener('submit', enviarSolicitud);
@@ -475,6 +475,13 @@
     const tipo = fila.querySelector('[data-campo="tipo"]').value;
     fila.querySelectorAll('[data-solo]').forEach((el) => { el.hidden = el.dataset.solo.split(' ').indexOf(tipo) < 0; });
   }
+  // "hasta" no puede ser anterior a "desde"
+  function ajustarHasta(fila) {
+    const d = fila.querySelector('[data-campo="desde"]'), h = fila.querySelector('[data-campo="hasta"]');
+    if (!d || !h) return;
+    h.min = d.value || '';
+    if (d.value && h.value && h.value < d.value) h.value = d.value;
+  }
   function formularioReemplazos(s) {
     const dias = diasAsignables(s), pre = st.reemPre || {};
     const internos = st.personal.filter((p) => p.local === s.local && p.activo !== false && p.id !== s.personal_id);
@@ -489,6 +496,7 @@
       const sel = ex ? (ex.tipo === 'INTERNO' ? 'I:' + ex.personal_id : ex.tipo === 'PARTTIME' ? 'P:' + ex.persona_id : '') : '';
       const ent = ex ? ex.entrada : (pre[f] ? String(pre[f].entrada).slice(0, 5) : '');
       const sal = ex ? ex.salida : (pre[f] ? String(pre[f].salida).slice(0, 5) : '');
+      const nota = ex ? '' : (pre[f] ? ' <span class="vac-nota">(por defecto)</span>' : ' <span class="vac-nota">(sin horario por defecto: ingrésalo)</span>');
       const campo = (txt, solo, html) => '<label data-solo="' + solo + '" style="display:flex;flex-direction:column;gap:4px;font-size:12px">' + txt + html + '</label>';
       return '<div class="reem-fila" data-dia="' + f + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid #eceff4">' +
         '<div style="font-size:13px"><b>' + DIAS_CORTO[d.getDay()] + ' ' + d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }) + '</b></div>' +
@@ -497,12 +505,12 @@
         campo('Nombre', 'CONTRATADO', '<input type="text" data-campo="nombre" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.nombre : '') + '">') +
         campo('RUT', 'CONTRATADO', '<input type="text" data-campo="rut" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.rut : '') + '">') +
         campo('Contrato desde', 'CONTRATADO', '<input type="date" data-campo="desde" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.contrato_desde : '') + '">') +
-        campo('Contrato hasta', 'CONTRATADO', '<input type="date" data-campo="hasta" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.contrato_hasta : '') + '">') +
-        campo('Entrada', '', '<input type="time" data-campo="entrada" value="' + esc(ent) + '">') +
-        campo('Salida', '', '<input type="time" data-campo="salida" value="' + esc(sal) + '">') +
+        campo('Contrato hasta', 'CONTRATADO', '<input type="date" data-campo="hasta" min="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.contrato_desde : '') + '" value="' + esc(ex && ex.tipo === 'CONTRATADO' ? ex.contrato_hasta : '') + '">') +
+        campo('Entrada' + nota, '', '<input type="time" data-campo="entrada" value="' + esc(ent) + '">') +
+        campo('Salida' + nota, '', '<input type="time" data-campo="salida" value="' + esc(sal) + '">') +
         '</div>';
     }).join('');
-    return '<div id="reem-form" style="margin-top:12px"><p class="vac-nota">El horario viene precargado del último turno de ' + esc(nombrePersona(s.personal_id)) + ' para ese día de la semana. Cámbialo si corresponde. Un día sin tipo queda sin reemplazo.</p>' +
+    return '<div id="reem-form" style="margin-top:12px"><p class="vac-nota">Hay que asignar reemplazo a <b>todas</b> las jornadas (' + dias.length + ' días). El horario por defecto es el último turno de ' + esc(nombrePersona(s.personal_id)) + ' para ese día de la semana; cámbialo si corresponde.</p>' +
       filas + '<div style="margin-top:12px"><button type="button" class="btn ama" data-acc="reem-guardar">Guardar reemplazos</button></div></div>';
   }
   function vistaReemplazos() {
@@ -520,12 +528,12 @@
   }
   // lee las filas del formulario y las guarda: primero borra, luego cambia, luego agrega
   async function guardarReemplazos(s, box) {
-    const cambios = [];
+    const cambios = [], faltan = [];
     box.querySelectorAll('[data-dia]').forEach((fila) => {
       const f = fila.dataset.dia, ex = reemDe(s.id, f);
       const c = (k) => { const el = fila.querySelector('[data-campo="' + k + '"]'); return el ? el.value.trim() : ''; };
       const tipo = c('tipo');
-      if (!tipo) { if (ex) cambios.push({ f, op: 'delete', id: ex.id }); return; }
+      if (!tipo) { faltan.push(dDe(f).toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })); return; }
       const row = { solicitud_id: s.id, fecha: f, tipo: tipo, personal_id: null, persona_id: null, nombre: '', rut: '', contrato_desde: null, contrato_hasta: null, entrada: c('entrada'), salida: c('salida') };
       if (!/^\d{2}:\d{2}$/.test(row.entrada) || !/^\d{2}:\d{2}$/.test(row.salida)) throw new Error('El día ' + f + ' necesita entrada y salida.');
       if (tipo === 'INTERNO' || tipo === 'PARTTIME') {
@@ -536,9 +544,11 @@
       } else {
         row.nombre = c('nombre'); row.rut = c('rut'); row.contrato_desde = c('desde') || null; row.contrato_hasta = c('hasta') || null;
         if (!row.nombre || !row.rut || !row.contrato_desde || !row.contrato_hasta) throw new Error('El contratado del día ' + f + ' necesita nombre, RUT y fechas del contrato.');
+        if (row.contrato_hasta < row.contrato_desde) throw new Error('El contrato "hasta" no puede ser anterior a "desde" (día ' + f + ').');
       }
       cambios.push({ f, op: ex ? 'update' : 'insert', id: ex ? ex.id : null, row });
     });
+    if (faltan.length) throw new Error('Falta asignar reemplazo en ' + faltan.length + ' día(s): ' + faltan.join(', ') + '. Todas las jornadas de vacaciones deben tener reemplazo.');
     const orden = { delete: 0, update: 1, insert: 2 };
     cambios.sort((a, b) => orden[a.op] - orden[b.op]);
     let n = 0;
@@ -587,6 +597,7 @@
         v.addEventListener('click', accion);
         v.addEventListener('change', (ev) => {
           if (ev.target.dataset && ev.target.dataset.campo === 'tipo') { mostrarCampos(ev.target.closest('[data-dia]')); return; }
+          if (ev.target.dataset && ev.target.dataset.campo === 'desde') { ajustarHasta(ev.target.closest('[data-dia]')); return; }
           if (ev.target.id && ev.target.id.indexOf('rep-') === 0) { cambiarReporte(ev.target); return; }
           if (ev.target.id === 'vac-mes') { st.mes = Number(ev.target.value); render(); }
           if (ev.target.id === 'vac-loc') { st.local = ev.target.value; render(); }
