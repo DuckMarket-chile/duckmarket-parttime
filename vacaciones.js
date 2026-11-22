@@ -479,23 +479,34 @@
       el.hidden = lista.length > 0 && lista.indexOf(tipo) < 0;
     });
   }
-  // lo que se elige en un día se copia a los días que aún no tienen reemplazo (cada día se puede cambiar después)
+  // lo que se elige en un día se copia a los demás días. Los vacíos se completan solos; si otros días ya tienen
+  // otro reemplazo, se pregunta si también se cambian (Aceptar = todos; Cancelar = solo este día y los vacíos)
   function propagarPlantilla(fila) {
     const form = fila.closest('#reem-form');
     if (!form) return;
     const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
     const plantilla = { tipo: leer(fila, 'tipo'), persona: leer(fila, 'persona'), nombre: leer(fila, 'nombre'), rut: leer(fila, 'rut'), desde: leer(fila, 'desde'), hasta: leer(fila, 'hasta') };
     if (!plantilla.tipo) return;
-    // se completan solo los campos vacíos de los días sin tipo o con el mismo tipo (no se pisa lo que ya se eligió)
-    form.querySelectorAll('[data-dia]').forEach((otra) => {
-      if (otra === fila) return;
-      const tipoOtra = leer(otra, 'tipo');
-      if (tipoOtra && tipoOtra !== plantilla.tipo) return;
+    const otras = [...form.querySelectorAll('[data-dia]')].filter((o) => o !== fila);
+    const distintas = otras.filter((o) => {
+      if (!leer(o, 'tipo')) return false;
+      return Object.keys(plantilla).some((k) => leer(o, k) !== plantilla[k]);
+    });
+    const cambiarTodos = distintas.length > 0 && window.confirm(
+      'Ya hay ' + distintas.length + ' día(s) con otro reemplazo.\n\n' +
+      '¿Cambiarlos también a este reemplazo?\n\n' +
+      'Aceptar: cambia todos los días.\n' +
+      'Cancelar: solo cambia este día y completa los vacíos.');
+    otras.forEach((o) => {
+      const tipoOtra = leer(o, 'tipo');
+      const sobrescribir = cambiarTodos && tipoOtra;
+      if (tipoOtra && tipoOtra !== plantilla.tipo && !sobrescribir) return;
       Object.keys(plantilla).forEach((k) => {
-        const x = otra.querySelector('[data-campo="' + k + '"]');
-        if (x && !x.value && plantilla[k]) x.value = plantilla[k];
+        const x = o.querySelector('[data-campo="' + k + '"]');
+        if (!x) return;
+        if (sobrescribir || (!x.value && plantilla[k])) x.value = plantilla[k];
       });
-      mostrarCampos(otra); ajustarHasta(otra);
+      mostrarCampos(o); ajustarHasta(o);
     });
   }
   // "hasta" no puede ser anterior a "desde"
