@@ -1,0 +1,73 @@
+/* Vacaciones de planta: calendario y listas. Usa las mismas variables que la web si existen. */
+.vac-pest { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px; }
+.vac-pest button { padding: 7px 12px; border-radius: 8px; border: 1px solid #c9d2dc; background: #fff; cursor: pointer; font: inherit; }
+.vac-pest button[aria-selected="true"] { background: #12355B; color: #fff; border-color: #12355B; }
+.vac-barra { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+.vac-res, .vac-nota { color: #5b6b7a; font-size: 13px; }
+.vac-tag { font-weight: 600; }
+.vac-cal { overflow-x: auto; border: 1px solid #c9d2dc; border-radius: 10px; background: #fff; }
+.vac-grilla { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 11px; }
+.vac-grilla th, .vac-grilla td { padding: 0; text-align: center; }
+.vac-grilla th { font-weight: 500; color: #5b6b7a; padding: 4px 0; min-width: 22px; }
+.vac-grilla td { height: 28px; min-width: 22px; border-left: 1px solid #e3e8ee; }
+.vac-grilla .vac-puesto { position: sticky; left: 0; background: #fff; text-align: left; padding: 6px 10px; min-width: 150px; font-size: 13px; border-right: 1px solid #c9d2dc; z-index: 1; }
+.vac-grilla .vac-loc { background: #eef2f6; font-weight: 600; }
+.vac-grilla td.v { background: #cfe6dd; } .vac-grilla td.p { background: #f3e6b8; }
+.vac-grilla td.r { background: #dfe9f2; } .vac-grilla td.fds { background: #eef1f4; } .vac-grilla td.fer { background: #e9d7f0; }
+.vac-leyenda { display: flex; flex-wrap: wrap; gap: 12px; margin: 8px 0; font-size: 12px; color: #5b6b7a; }
+.vac-leyenda i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; border: 1px solid #c9d2dc; }
+.vac-leyenda .v { background: #cfe6dd; } .vac-leyenda .p { background: #f3e6b8; } .vac-leyenda .r { background: #dfe9f2; }
+.vac-leyenda .fds { background: #eef1f4; } .vac-leyenda .fer { background: #e9d7f0; }
+.vac-form { display: grid; gap: 10px; max-width: 520px; }
+.vac-lista { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+.vac-lista li { background: #fff; border: 1px solid #c9d2dc; border-radius: 10px; padding: 10px 12px; }
+.vac-cambio { display: inline-flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.vac-est { font-weight: 600; }
+.vac-est.aprobada { color: #2c6b5a; } .vac-est.rechazada { color: #9b3b2e; } .vac-est.pendiente { color: #8a6a12; }
+.vac-ok { color: #2c6b5a; font-weight: 600; } .vac-error { color: #9b3b2e; font-weight: 600; }
+.vac-sub { margin: 18px 0 8px; font-size: 15px; }
+.vac-grilla td.v, .vac-grilla td.p { text-align: center; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 500; }
+.vac-grilla td.r { font-size: 10px; font-weight: 700; color: #12355B; }
+.vac-grilla td.vac-nombre { text-align: center; }
+.vac-grilla .vac-sub { font-size: 10px; border-right: 1px solid #c9d2dc; }
+.vac-grilla tr.vac-fila-nombre td { height: 22px; }
+.vac-grilla .vac-puesto .vac-pu { display: block; font-size: 10px; color: #5b6b7a; font-weight: 400; }
+.vac-grilla .vac-libre { color: #8a97a4; }
+.vac-grilla td.v, .vac-grilla td.p { text-align: center; }
+
+.vac-tabla { border-collapse: collapse; min-width: 100%; font-size: 13px; background: #fff; }
+.vac-tabla th, .vac-tabla td { border-bottom: 1px solid #e3e8ee; padding: 7px 10px; text-align: left; vertical-align: top; }
+.vac-tabla th { background: #eef2f6; font-weight: 600; }
+@media print {
+  .menu, .barra-movil, .vac-pest, .vac-no-imprimir, .aviso-demo, #aviso-version { display: none !important; }
+  .principal, .app, body { background: #fff !important; }
+  .vac-cal { overflow: visible; border: 0; }
+  .vac-tabla th, .vac-tabla td { border-color: #bbb; }
+}
+
+.vac-res-grid { display: grid; gap: 14px; grid-template-columns: 1fr; }
+@media (min-width: 900px) { .vac-res-grid { grid-template-columns: 1fr 1fr 1fr; } }
+.vac-res-loc h3 { margin: 0 0 8px; font-size: 16px; }
+.vac-res-loc p { margin: 6px 0; font-size: 13px; }
+.vac-kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 8px; }
+.vac-kpis div { background: #eef2f6; border-radius: 8px; padding: 8px; text-align: center; }
+.vac-kpis b { display: block; font-size: 20px; color: #12355B; }
+.vac-kpis span { font-size: 11px; color: #5b6b7a; }
+
+/* comprobante */
+.comp-area { background: #fff; color: #111; padding: 28px; border: 1px solid #c9d2dc; border-radius: 10px; max-width: 760px; }
+.comp-enc { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #12355B; padding-bottom: 12px; margin-bottom: 18px; }
+.comp-enc img { width: 56px; height: 56px; object-fit: contain; }
+.comp-enc b { display: block; font-size: 18px; color: #12355B; } .comp-enc span { font-size: 13px; color: #444; }
+.comp-num { margin-left: auto; font-size: 13px; color: #444; }
+.comp-tabla { width: 100%; border-collapse: collapse; font-size: 14px; }
+.comp-tabla th, .comp-tabla td { border-bottom: 1px solid #ddd; padding: 9px 8px; text-align: left; }
+.comp-tabla th { width: 42%; background: #f4f6f9; font-weight: 600; }
+.comp-nota { font-size: 11px; color: #666; margin: 14px 0 0; }
+.comp-firmas { display: flex; justify-content: space-between; gap: 40px; margin-top: 56px; font-size: 13px; }
+.comp-firmas > div { flex: 1; text-align: center; } .comp-firmas span { display: block; border-top: 1px solid #111; margin-bottom: 6px; }
+@media print {
+  body * { visibility: hidden; }
+  .comp-area, .comp-area * { visibility: visible; }
+  .comp-area { position: absolute; left: 0; top: 0; width: 100%; border: 0; max-width: none; padding: 12mm; }
+}

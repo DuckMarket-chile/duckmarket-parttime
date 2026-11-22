@@ -43,6 +43,7 @@
         try { return await cargarPerfil(); } catch (e) { await sb.auth.signOut(); throw e; }
       },
       async salir() { await sb.auth.signOut(); perfil = null; },
+      cliente: () => sb,
       async cambiarClave(nueva) { ok(await sb.auth.updateUser({ password: nueva })); },
 
       turnos: (f) => todo(() => { let q = sb.from('turnos').select('*').order('fecha').order('entrada').order('id');

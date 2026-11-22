@@ -153,3 +153,11 @@ dialog form { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
 .yo .ver { font-size: 11px; color: #8FA7C4; margin-top: 4px; }
 #aviso-version { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; background: var(--amarillo); color: var(--azul); font-weight: 600; box-shadow: 0 -4px 14px rgba(0,0,0,.18); }
 #aviso-version button { flex: none; background: var(--azul); color: #fff; border: 0; border-radius: 10px; padding: 10px 14px; font-weight: 700; cursor: pointer; }
+
+/* pantalla de elección de sección */
+.elegir { display: grid; gap: 18px; justify-items: center; align-content: center; min-height: 100vh; padding: 24px; }
+.elegir-tit { text-align: center; } .elegir-tit .logo { width: 64px; margin: 0 auto 8px; } .elegir-tit h1 { margin: 0; font-size: 24px; } .elegir-tit p { margin: 4px 0 0; color: #5b6b7a; }
+.elegir-op { display: grid; gap: 12px; width: min(420px, 100%); }
+.elegir .opcion { display: grid; gap: 4px; text-align: left; padding: 16px 18px; border: 1px solid #c9d2dc; border-radius: 12px; background: #fff; cursor: pointer; font: inherit; }
+.elegir .opcion b { font-size: 17px; color: #12355B; } .elegir .opcion span { color: #5b6b7a; font-size: 13px; }
+.elegir .opcion:hover, .elegir .opcion:focus-visible { border-color: #12355B; outline: none; box-shadow: 0 0 0 2px #12355B33; }

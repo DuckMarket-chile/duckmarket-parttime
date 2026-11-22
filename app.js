@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.21.3';
+  const VERSION = '2026.11.21.9';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -41,7 +41,8 @@
     reportes: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>',
     historial: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
     usuarios: '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 018 0v4"></path>',
-    buscar: '<circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>'
+    buscar: '<circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>',
+    'vac-publicar': '<path d="M12 19V5M5 12l7-7 7 7"></path>', 'vac-resumen': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-calendario': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-general': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-solicitud': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-aprobacion': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-reportes': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>', 'vac-comprobantes': '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path>'
   };
   const icono = (n, t) => '<svg aria-hidden="true" width="' + (t || 18) + '" height="' + (t || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICO[n] + '</svg>';
   const est = (txt, tipo) => '<span class="est ' + tipo + '">' + esc(txt) + '</span>';
@@ -86,6 +87,7 @@
   const confirmar = (titulo, txt, boton, peligro) => dialogo(titulo, '<p style="margin:0;white-space:pre-line">' + esc(txt) + '</p>', { boton: boton || 'Sí', peligro }).then((r) => !!r);
 
   // Informe en Excel de verdad (.xlsx con SheetJS). Sin la librería (sin internet) baja el CSV de siempre.
+  window.descargarExcel = (nombre, filas) => descargarExcel(nombre, filas);
   function descargarExcel(nombre, filas) {
     if (!window.XLSX) return descargarCSV(nombre.replace(/\.xlsx$/, '.csv'), filas);
     const numero = (c) => (typeof c === 'string' && /^-?\d+(\.\d+)?$/.test(c.trim()) ? Number(c) : c);
@@ -159,16 +161,42 @@
     { id: 'personas', txt: 'Personas', ve: () => tiene('Personas') },
     { id: 'reportes', txt: 'Reportes', ve: () => tiene('VerResumen') || tiene('ReportesPlan') },
     { id: 'historial', txt: 'Historial de cambios', ve: () => tiene('Historial') },
-    { id: 'usuarios', txt: 'Usuarios y permisos', ve: () => S.perfil.admin || tiene('Usuarios') }
+    { id: 'usuarios', txt: 'Usuarios y permisos', ve: () => S.perfil.admin || tiene('Usuarios') },
+    { grupo: 'VACACIONES DE PLANTA' },
+    { id: 'vac-publicar', txt: 'Publicar vacaciones', ve: () => !!S.perfil.admin && !!S.vacAcceso },
+    { id: 'vac-resumen', txt: 'Resumen', ve: () => !!S.vacAcceso && !!S.vacPublicado },
+    { id: 'vac-calendario', txt: 'Calendario por local', ve: () => !!S.vacAcceso && !!S.vacPublicado },
+    { id: 'vac-general', txt: 'Vista general', ve: () => !!S.vacAcceso && !!S.vacPublicado },
+    { id: 'vac-solicitud', txt: 'Nueva solicitud', ve: () => !!S.vacAcceso && !!S.vacPublicado },
+    { id: 'vac-aprobacion', txt: 'Aprobaciones', ve: () => !!S.vacAcceso && VACDIR() },
+    { id: 'vac-reportes', txt: 'Reportes', ve: () => !!S.vacAcceso && !!S.vacPublicado },
+    { id: 'vac-comprobantes', txt: 'Comprobantes', ve: () => !!S.vacAcceso && VACDIR() }
   ];
+  // pantalla de elección: quien tiene Part-Time y vacaciones elige a dónde entra
+  function pantallaElegir() {
+    document.body.innerHTML = '<main class="login elegir"><div class="elegir-tit"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><h1>¿A dónde entras?</h1><p>Hola, ' + esc(S.perfil.usuario) + '</p></div>' +
+      '<div class="elegir-op"><button type="button" class="opcion" data-modo="pt"><b>Part-Time</b><span>Registro del día, planificador, pagos y reportes</span></button>' +
+      '<button type="button" class="opcion" data-modo="vac"><b>Vacaciones de planta</b><span>Calendario y solicitudes del personal de planta</span></button></div>' +
+      '<button type="button" class="btn" id="b-salir-el">Salir</button></main>';
+    document.querySelectorAll('[data-modo]').forEach((b) => { b.onclick = () => { S.modo = b.dataset.modo; montar(); }; });
+    $('#b-salir-el').onclick = async () => { await DB.salir(); S.perfil = null; S.modo = null; location.hash = ''; pantallaEntrada(); };
+  }
+
   async function montar() {
     try { S.personas = await DB.personasLista(); } catch (e) { S.personas = []; }
+    try { S.vacAcceso = await window.VAC.acceso(); } catch (e) { S.vacAcceso = null; }
+    try { S.vacPublicado = S.vacAcceso ? await window.VAC.publicado() : false; } catch (e) { S.vacPublicado = false; }
+    if (S.vacAcceso && S.vacPublicado && !S.modo) return pantallaElegir();
+    S.modo = S.modo || 'pt';
+    if (S.modo === 'vac' && location.hash.indexOf('#/vac-') !== 0) location.hash = '#/vac-resumen';
+    if (S.modo === 'pt' && location.hash.indexOf('#/vac-') === 0) location.hash = '#/tablero';
     S.planSuc = S.planSuc || planificables()[0] || visibles()[0];
     if (visibles().length === 1) S.suc = visibles()[0];
     const items = []; let grupo = null;
     for (const s of SECCIONES) {
       if (s.grupo) { grupo = s.grupo; continue; }
       if (!s.ve()) continue;
+      if ((s.id.indexOf('vac-') === 0) !== (S.modo === 'vac')) continue;
       if (grupo) { items.push('<div class="grupo">' + grupo + '</div>'); grupo = null; }
       items.push('<a href="#/' + s.id + '" data-sec="' + s.id + '">' + icono(s.id) + '<span>' + s.txt + '</span>' + (s.id === 'planificador' ? '<span class="globo oculto" id="globo-plan"></span>' : '') + '</a>');
     }
@@ -176,11 +204,12 @@
     const rol = S.perfil.admin ? 'Administrador' : nomRol + (S.perfil.sucursal ? ' · ' + S.perfil.sucursal : '');
     document.body.innerHTML = '<div class="app"><nav class="menu" aria-label="Secciones">' +
       '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>Part-Time</span></div></div>' + items.join('') +
-      '<div class="yo"><b>' + esc(S.perfil.usuario) + '</b><span>' + esc(rol) + '</span><button type="button" id="b-clave">Cambiar mi clave</button><button type="button" id="b-salir">Salir</button><span class="ver">Versión ' + VERSION + '</span></div></nav>' +
+      '<div class="yo"><b>' + esc(S.perfil.usuario) + '</b><span>' + esc(rol) + '</span>' + (S.vacAcceso ? '<button type="button" id="b-cambiar">Cambiar de sección</button>' : '') + '<button type="button" id="b-clave">Cambiar mi clave</button><button type="button" id="b-salir">Salir</button><span class="ver">Versión ' + VERSION + '</span></div></nav>' +
       '<div class="principal"><div class="barra-movil"><button type="button" id="b-menu" aria-label="Abrir menú"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button><b id="tit-movil">Part-Time</b></div>' +
       (DB.demo ? '<div class="aviso-demo">MODO DE PRUEBA · datos de ejemplo, nada se guarda en la base</div>' : '') +
       '<div id="vista"></div></div></div>';
-    $('#b-salir').onclick = async () => { await DB.salir(); S.perfil = null; location.hash = ''; pantallaEntrada(); };
+    $('#b-salir').onclick = async () => { await DB.salir(); S.perfil = null; S.modo = null; location.hash = ''; pantallaEntrada(); };
+    if ($('#b-cambiar')) $('#b-cambiar').onclick = () => { S.modo = null; montar(); };
     // cierre automático tras 30 minutos sin uso (equipos compartidos)
     window.__ultimaActividad = Date.now();
     if (!window.__inactividad) {
@@ -972,7 +1001,12 @@
 
   const VISTAS = { tablero: (v) => vistaTablero(v), registro: (v) => vistaRegistro(v), planificador: vistaPlanificador, dias: vistaDias, pagos: (v) => vistaPagos(v), conciliacion: vistaConciliacion,
     personas: (v) => vistaPersonas(v, '', null), reportes: (v) => vistaReportes(v), historial: (v) => vistaHistorial(v, ''), usuarios: (v) => vistaUsuarios(v),
-    buscar: (v) => vistaBuscar(v) };
+    buscar: (v) => vistaBuscar(v),
+    'vac-resumen': (v) => window.VAC.vista(v, 'resumen'), 'vac-calendario': (v) => window.VAC.vista(v, 'local'),
+    'vac-general': (v) => window.VAC.vista(v, 'general'), 'vac-solicitud': (v) => window.VAC.vista(v, 'solicitud'),
+    'vac-aprobacion': (v) => window.VAC.vista(v, 'aprobacion'), 'vac-reportes': (v) => window.VAC.vista(v, 'reportes'),
+    'vac-comprobantes': (v) => window.VAC.vista(v, 'comprobantes'), 'vac-publicar': (v) => window.VAC.vistaPublicar(v) };
+  const VACDIR = () => !!S.vacAcceso && (S.vacAcceso.rol === 'administracion' || S.vacAcceso.rol === 'gerencia');
 
   // ================================================================== versión y aviso de actualización
   // Compara la versión que tiene abierta este navegador con version.json del servidor (sin caché).
