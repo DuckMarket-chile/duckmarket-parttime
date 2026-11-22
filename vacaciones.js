@@ -482,9 +482,15 @@
     const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
     const plantilla = { tipo: leer(fila, 'tipo'), persona: leer(fila, 'persona'), nombre: leer(fila, 'nombre'), rut: leer(fila, 'rut'), desde: leer(fila, 'desde'), hasta: leer(fila, 'hasta') };
     if (!plantilla.tipo) return;
+    // se completan solo los campos vacíos de los días sin tipo o con el mismo tipo (no se pisa lo que ya se eligió)
     form.querySelectorAll('[data-dia]').forEach((otra) => {
-      if (otra === fila || leer(otra, 'tipo')) return;
-      Object.keys(plantilla).forEach((k) => { const x = otra.querySelector('[data-campo="' + k + '"]'); if (x) x.value = plantilla[k]; });
+      if (otra === fila) return;
+      const tipoOtra = leer(otra, 'tipo');
+      if (tipoOtra && tipoOtra !== plantilla.tipo) return;
+      Object.keys(plantilla).forEach((k) => {
+        const x = otra.querySelector('[data-campo="' + k + '"]');
+        if (x && !x.value && plantilla[k]) x.value = plantilla[k];
+      });
       mostrarCampos(otra); ajustarHasta(otra);
     });
   }
