@@ -132,7 +132,7 @@
   function pantallaEntrada(error) {
     window.onhashchange = null;
     document.body.innerHTML = '<main class="login"><form autocomplete="on">' +
-      '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>Registro Part-Time</span></div></div>' +
+      '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>Gestión de personas</span></div></div>' +
       (DB.demo ? '<div class="error" style="background:var(--avisof);color:var(--aviso)">MODO DE PRUEBA: datos de ejemplo, no se guarda nada. Entra como admin, gerente, andes, encinas o sanmartin con cualquier clave.</div>' : '') +
       '<label class="campo">Usuario<input name="u" autocomplete="username" required autocapitalize="none"></label>' +
       '<label class="campo">Clave<input name="c" type="password" autocomplete="current-password" required></label>' +
@@ -163,7 +163,7 @@
     { id: 'historial', txt: 'Historial de cambios', ve: () => tiene('Historial') },
     { id: 'usuarios', txt: 'Usuarios y permisos', ve: () => S.perfil.admin || tiene('Usuarios') },
     { id: 'respaldo', txt: 'Respaldo de datos', ve: () => !!S.perfil.admin },
-    { grupo: 'VACACIONES DE PLANTA' },
+    { grupo: 'VACACIONES' },
     { id: 'vac-publicar', txt: 'Publicar vacaciones', ve: () => !!S.perfil.admin && !!S.vacAcceso },
     { id: 'vac-resumen', txt: 'Resumen', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-calendario', txt: 'Calendario por local', ve: () => !!S.vacAcceso && !!S.vacPublicado },
@@ -178,7 +178,7 @@
   function pantallaElegir() {
     document.body.innerHTML = '<main class="login elegir"><div class="elegir-tit"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><h1>¿A dónde entras?</h1><p>Hola, ' + esc(S.perfil.usuario) + '</p></div>' +
       '<div class="elegir-op"><button type="button" class="opcion" data-modo="pt"><b>Part-Time</b><span>Registro del día, planificador, pagos y reportes</span></button>' +
-      '<button type="button" class="opcion" data-modo="vac"><b>Vacaciones de planta</b><span>Calendario y solicitudes del personal de planta</span></button></div>' +
+      '<button type="button" class="opcion" data-modo="vac"><b>Vacaciones</b><span>Calendario y solicitudes del personal de planta</span></button></div>' +
       '<button type="button" class="btn" id="b-salir-el">Salir</button></main>';
     document.querySelectorAll('[data-modo]').forEach((b) => { b.onclick = () => { S.modo = b.dataset.modo; montar(); }; });
     $('#b-salir-el').onclick = async () => { await DB.salir(); S.perfil = null; S.modo = null; location.hash = ''; pantallaEntrada(); };

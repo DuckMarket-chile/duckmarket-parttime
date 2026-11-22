@@ -328,7 +328,7 @@
     const selEst = '<select id="rep-estado">' + [['aprobada', 'Solo aprobadas'], ['todas', 'Todas (pendientes incluidas)']].map(([k, t]) => '<option value="' + k + '"' + (r.estado === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
     const barra = '<div class="vac-barra vac-no-imprimir">' + selLoc + selMes + selVista + selEst +
       '<button type="button" class="btn" data-acc="rep-excel">Exportar a Excel</button><button type="button" class="btn" data-acc="rep-imprimir">Imprimir / PDF</button></div>';
-    const titulo = '<h3 class="vac-sub">Vacaciones de planta · ' + esc(r.local) + ' · ' + (r.vista === 'saldos' ? 'saldos del personal al ' + hoyCorto() : r.vista === 'listado' ? 'listado completo' : MESES[r.mes][2]) + '</h3>';
+    const titulo = '<h3 class="vac-sub">Vacaciones · ' + esc(r.local) + ' · ' + (r.vista === 'saldos' ? 'saldos del personal al ' + hoyCorto() : r.vista === 'listado' ? 'listado completo' : MESES[r.mes][2]) + '</h3>';
     const { cabecera, filas } = datosReporte();
     let tabla = '';
     if (!filas.length) tabla = '<p class="vac-nota">No hay datos para este reporte.</p>';
@@ -660,7 +660,7 @@
     vista(v, seccion) {
       st.v = v;
       if (seccion) { st.tab = seccion; st.lateral = true; }
-      v.innerHTML = '<div class="cabecera"><h1>Vacaciones de planta</h1><p>Calendario 2027 · diciembre a marzo</p></div><section class="zona"><p class="vac-nota">Cargando…</p></section>';
+      v.innerHTML = '<div class="cabecera"><h1>Vacaciones</h1><p>Calendario 2027 · diciembre a marzo</p></div><section class="zona"><p class="vac-nota">Cargando…</p></section>';
       cargar().then(() => { render(); }).catch((e) => { st.error = e.message; render(); });
       if (!v.dataset.listo) {
         v.dataset.listo = '1';
