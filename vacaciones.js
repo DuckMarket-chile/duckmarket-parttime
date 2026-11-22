@@ -636,6 +636,22 @@
   // ================================================================== API para app.js
   const VAC = {
     acceso,
+    // acceso a Vacaciones de un usuario (lo lee y lo cambia solo administración; la base lo exige también)
+    async accesoDe(uid) {
+      if (!st.sb) return null;
+      const r = await st.sb.from('vac_accesos').select('*').eq('usuario_id', uid).maybeSingle();
+      return r.data || null;
+    },
+    async guardarAcceso(uid, rol, local) {
+      if (!st.sb) throw new Error('Vacaciones no está conectado.');
+      if (!rol) {
+        const d = await st.sb.from('vac_accesos').delete().eq('usuario_id', uid);
+        if (d.error) throw new Error(d.error.message);
+        return;
+      }
+      const r = await st.sb.from('vac_accesos').upsert({ usuario_id: uid, rol: rol, local: rol === 'encargado' ? local : null });
+      if (r.error) throw new Error(r.error.message);
+    },
     // ¿el módulo está publicado para el personal? (administración y gerencia siempre lo ven)
     async publicado() {
       if (esDirectivo()) return true;

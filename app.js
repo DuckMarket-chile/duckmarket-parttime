@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.22.5';
+  const VERSION = '2026.11.22.6';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -926,9 +926,14 @@
       if (b.dataset.acc === 'editar') {
         const p = lista.find((x) => x.id === b.dataset.id);
         const opcionesRol = (S.perfil.admin ? [['admin', 'Administrador (todo)']] : []).concat(roles.map((r) => [r.id, r.nombre]));
+        const vacActual = window.VAC ? await window.VAC.accesoDe(p.id).catch(() => null) : null;
+        const puedeVac = !!(S.vacAcceso && S.vacAcceso.rol === 'administracion');
         const r = await dialogo('Usuario ' + p.usuario, '<label class="campo">Nombre<input name="nombre" value="' + esc(p.nombre) + '"></label><div class="campos2"><label class="campo">Rol<select name="rol">' + opciones(opcionesRol, p.rol) + '</select></label>' +
           '<label class="campo">Sucursal<select name="sucursal">' + opciones([['', 'Oficina (ninguna)']].concat(L.SUCURSALES.map((s) => [s, s])), p.sucursal || '') + '</select></label></div>' +
           '<div id="perms" style="max-height:42vh;overflow:auto;border-top:1px solid var(--linea);padding-top:4px">' + casillasPermisos(p.permisos || [], (k) => mios.indexOf(k) >= 0) + '</div>' +
+          '<div class="campos2"><label class="campo">Acceso a Vacaciones<select name="vac"' + (puedeVac ? '' : ' disabled') + '>' + opciones([['', 'Sin acceso'], ['encargado', 'Encargado de local'], ['administracion', 'Administración'], ['gerencia', 'Gerencia']], vacActual ? vacActual.rol : '') + '</select></label>' +
+          '<label class="campo">Local (si es encargado)<select name="vloc"' + (puedeVac ? '' : ' disabled') + '>' + opciones([['', 'Ninguno']].concat(['ANDES', 'ENCINAS', 'SAN MARTIN'].map((s) => [s, s])), vacActual && vacActual.local ? vacActual.local : '') + '</select></label></div>' +
+          (puedeVac ? '' : '<p class="nota">Solo administración de Vacaciones puede cambiar estos accesos.</p>') +
           '<label class="check"><input type="checkbox" name="activo"' + (p.activo ? ' checked' : '') + '> Activo (puede entrar)</label>', {
           boton: 'Guardar',
           alAbrir: (f) => {
@@ -943,10 +948,12 @@
           validar: (d, f) => {
             f.querySelectorAll('[data-perm]:disabled').forEach((c) => { if (c.checked) d['perm_' + c.dataset.perm] = 'on'; });
             if (p.id === S.perfil.id && (d.rol !== S.perfil.rol || !d.activo)) return 'No puedes cambiar tu propio rol ni desactivarte.';
-            return DB.guardarPerfil({ id: p.id, nombre: d.nombre, sucursal: d.sucursal || null, rol: d.rol, activo: d.activo, permisos: permisosMarcados(d) }).then(() => null);
+            if (puedeVac && d.vac === 'encargado' && !d.vloc) return 'Elige el local del encargado de Vacaciones.';
+            const guardar = DB.guardarPerfil({ id: p.id, nombre: d.nombre, sucursal: d.sucursal || null, rol: d.rol, activo: d.activo, permisos: permisosMarcados(d) });
+            return guardar.then(() => (puedeVac && window.VAC ? window.VAC.guardarAcceso(p.id, d.vac || '', d.vloc || '') : null)).then(() => null);
           }
         });
-        if (r) { mensaje('Usuario guardado.'); vistaUsuarios(v, 'usuarios'); }
+        if (r) { mensaje('Usuario guardado. Si cambiaste el acceso a Vacaciones, la persona debe volver a entrar para verlo.'); vistaUsuarios(v, 'usuarios'); }
       }
       if (b.dataset.acc === 'rol') {
         const rol = roles.find((x) => x.id === b.dataset.id) || { id: '', nombre: '', permisos: [], sistema: false };
