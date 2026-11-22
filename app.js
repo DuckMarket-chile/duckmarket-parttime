@@ -551,7 +551,7 @@
     if (!S.quincena) S.quincena = qs[0].clave;
     const q = L.quincenaDeClave(S.quincena);
     const [turnos, abonos, personas] = await Promise.all([DB.turnos({ desde: q.desde, hasta: q.hasta }), DB.abonos(), DB.personas().catch(() => [])]);
-    const filas = L.resumenQuincena(turnos, abonos, q);
+    const filas = L.resumenQuincena(turnos, abonos, q).filter((f) => f.total > 0 || f.pagado > 0); // solo quienes tienen pagos en la quincena
     const vis = filas.filter((f) => (filtro.estado === 'Todos' || (filtro.estado === 'Con saldo' ? f.saldo > 0.5 : f.estado === filtro.estado)) && (!filtro.texto || L.normNombre(f.nombre).includes(L.normNombre(filtro.texto))));
     const tot = filas.reduce((s, f) => s + f.total, 0), pag = filas.reduce((s, f) => s + f.pagado, 0), conSaldo = filas.filter((f) => f.saldo > 0.5);
     let sel = filas.find((f) => f.nombre === S.pagoSel) || vis[0];
