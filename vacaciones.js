@@ -646,7 +646,7 @@
     async vistaPublicar(v) {
       const r = await st.sb.from('vac_config').select('valor').eq('clave', 'publicado').maybeSingle();
       const pub = !!(r.data && r.data.valor);
-      v.innerHTML = '<div class="cabecera"><h1>Publicar vacaciones de planta</h1><p>Decide cuándo las cuentas de encargado pueden ver el módulo.</p></div>' +
+      v.innerHTML = '<div class="cabecera"><h1>Publicar vacaciones</h1><p>Decide cuándo las cuentas de encargado pueden ver el módulo.</p></div>' +
         '<section class="zona"><div class="tarjeta" style="max-width:520px"><p><b>Estado:</b> ' + (pub ? '<span class="vac-ok">Publicado (los encargados lo ven)</span>' : '<span class="vac-error">Oculto (solo administración y gerencia)</span>') + '</p>' +
         '<button type="button" class="btn ama" id="vac-pub-btn">' + (pub ? 'Ocultar de nuevo' : 'Publicar para el personal') + '</button>' +
         '<p class="vac-nota" id="vac-pub-msg"></p></div></section>';
