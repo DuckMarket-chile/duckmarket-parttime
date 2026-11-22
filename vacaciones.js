@@ -479,6 +479,18 @@
       el.hidden = lista.length > 0 && lista.indexOf(tipo) < 0;
     });
   }
+  // RUT chileno: se revisa el dígito verificador (módulo 11). Devuelve el RUT con formato o null si no es válido
+  function rutNormal(txt) {
+    const s = String(txt || '').replace(/[^0-9kK]/g, '').toUpperCase();
+    if (s.length < 2) return null;
+    const cuerpo = s.slice(0, -1), dv = s.slice(-1);
+    let suma = 0, f = 2;
+    for (let i = cuerpo.length - 1; i >= 0; i--) { suma += Number(cuerpo[i]) * f; f = f === 7 ? 2 : f + 1; }
+    const r = 11 - (suma % 11);
+    const esperado = r === 11 ? '0' : r === 10 ? 'K' : String(r);
+    if (esperado !== dv) return null;
+    return cuerpo.replace(/\B(?=(\d{3})+(?!\d))/g, '.') + '-' + dv;
+  }
   // lo que se elige en un día se copia a los demás días. Los vacíos se completan solos; si otros días ya tienen
   // otro reemplazo, se pregunta si también se cambian (Aceptar = todos; Cancelar = solo este día y los vacíos)
   function propagarPlantilla(fila) {
@@ -578,6 +590,9 @@
       } else {
         row.nombre = c('nombre'); row.rut = c('rut'); row.contrato_desde = c('desde') || null; row.contrato_hasta = c('hasta') || null;
         if (!row.nombre || !row.rut || !row.contrato_desde || !row.contrato_hasta) throw new Error('El contratado del día ' + f + ' necesita nombre, RUT y fechas del contrato.');
+        const rutOk = rutNormal(row.rut);
+        if (!rutOk) throw new Error('El RUT del contratado del día ' + f + ' no es válido (revisa el dígito verificador).');
+        row.rut = rutOk;
         if (row.contrato_hasta < row.contrato_desde) throw new Error('El contrato "hasta" no puede ser anterior a "desde" (día ' + f + ').');
       }
       cambios.push({ f, op: ex ? 'update' : 'insert', id: ex ? ex.id : null, row });
@@ -631,6 +646,13 @@
         v.addEventListener('click', accion);
         v.addEventListener('change', (ev) => {
           const campo = ev.target.dataset ? ev.target.dataset.campo : '';
+          if (campo === 'rut') {
+            const ok = rutNormal(ev.target.value);
+            if (ok) ev.target.value = ok;
+            ev.target.style.borderColor = ok || !ev.target.value ? '' : '#b91c1c';
+            ev.target.title = ok || !ev.target.value ? '' : 'RUT no válido: revisa el dígito verificador';
+            return;
+          }
           if (['tipo', 'persona', 'nombre', 'rut', 'desde', 'hasta'].indexOf(campo) >= 0) {
             const fila = ev.target.closest('[data-dia]');
             if (campo === 'tipo') mostrarCampos(fila);
