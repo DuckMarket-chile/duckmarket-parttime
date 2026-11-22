@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.22.6';
+  const VERSION = '2026.11.22.7';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -930,10 +930,10 @@
         const puedeVac = !!(S.vacAcceso && S.vacAcceso.rol === 'administracion');
         const r = await dialogo('Usuario ' + p.usuario, '<label class="campo">Nombre<input name="nombre" value="' + esc(p.nombre) + '"></label><div class="campos2"><label class="campo">Rol<select name="rol">' + opciones(opcionesRol, p.rol) + '</select></label>' +
           '<label class="campo">Sucursal<select name="sucursal">' + opciones([['', 'Oficina (ninguna)']].concat(L.SUCURSALES.map((s) => [s, s])), p.sucursal || '') + '</select></label></div>' +
-          '<div id="perms" style="max-height:42vh;overflow:auto;border-top:1px solid var(--linea);padding-top:4px">' + casillasPermisos(p.permisos || [], (k) => mios.indexOf(k) >= 0) + '</div>' +
           '<div class="campos2"><label class="campo">Acceso a Vacaciones<select name="vac"' + (puedeVac ? '' : ' disabled') + '>' + opciones([['', 'Sin acceso'], ['encargado', 'Encargado de local'], ['administracion', 'Administración'], ['gerencia', 'Gerencia']], vacActual ? vacActual.rol : '') + '</select></label>' +
           '<label class="campo">Local (si es encargado)<select name="vloc"' + (puedeVac ? '' : ' disabled') + '>' + opciones([['', 'Ninguno']].concat(['ANDES', 'ENCINAS', 'SAN MARTIN'].map((s) => [s, s])), vacActual && vacActual.local ? vacActual.local : '') + '</select></label></div>' +
           (puedeVac ? '' : '<p class="nota">Solo administración de Vacaciones puede cambiar estos accesos.</p>') +
+          '<div id="perms" style="max-height:42vh;overflow:auto;border-top:1px solid var(--linea);padding-top:4px">' + casillasPermisos(p.permisos || [], (k) => mios.indexOf(k) >= 0) + '</div>' +
           '<label class="check"><input type="checkbox" name="activo"' + (p.activo ? ' checked' : '') + '> Activo (puede entrar)</label>', {
           boton: 'Guardar',
           alAbrir: (f) => {
