@@ -475,6 +475,19 @@
     const tipo = fila.querySelector('[data-campo="tipo"]').value;
     fila.querySelectorAll('[data-solo]').forEach((el) => { el.hidden = el.dataset.solo.split(' ').indexOf(tipo) < 0; });
   }
+  // lo que se elige en un día se copia a los días que aún no tienen reemplazo (cada día se puede cambiar después)
+  function propagarPlantilla(fila) {
+    const form = fila.closest('#reem-form');
+    if (!form) return;
+    const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
+    const plantilla = { tipo: leer(fila, 'tipo'), persona: leer(fila, 'persona'), nombre: leer(fila, 'nombre'), rut: leer(fila, 'rut'), desde: leer(fila, 'desde'), hasta: leer(fila, 'hasta') };
+    if (!plantilla.tipo) return;
+    form.querySelectorAll('[data-dia]').forEach((otra) => {
+      if (otra === fila || leer(otra, 'tipo')) return;
+      Object.keys(plantilla).forEach((k) => { const x = otra.querySelector('[data-campo="' + k + '"]'); if (x) x.value = plantilla[k]; });
+      mostrarCampos(otra); ajustarHasta(otra);
+    });
+  }
   // "hasta" no puede ser anterior a "desde"
   function ajustarHasta(fila) {
     const d = fila.querySelector('[data-campo="desde"]'), h = fila.querySelector('[data-campo="hasta"]');
@@ -596,8 +609,14 @@
         v.dataset.listo = '1';
         v.addEventListener('click', accion);
         v.addEventListener('change', (ev) => {
-          if (ev.target.dataset && ev.target.dataset.campo === 'tipo') { mostrarCampos(ev.target.closest('[data-dia]')); return; }
-          if (ev.target.dataset && ev.target.dataset.campo === 'desde') { ajustarHasta(ev.target.closest('[data-dia]')); return; }
+          const campo = ev.target.dataset ? ev.target.dataset.campo : '';
+          if (['tipo', 'persona', 'nombre', 'rut', 'desde', 'hasta'].indexOf(campo) >= 0) {
+            const fila = ev.target.closest('[data-dia]');
+            if (campo === 'tipo') mostrarCampos(fila);
+            if (campo === 'desde') ajustarHasta(fila);
+            propagarPlantilla(fila);
+            return;
+          }
           if (ev.target.id && ev.target.id.indexOf('rep-') === 0) { cambiarReporte(ev.target); return; }
           if (ev.target.id === 'vac-mes') { st.mes = Number(ev.target.value); render(); }
           if (ev.target.id === 'vac-loc') { st.local = ev.target.value; render(); }
