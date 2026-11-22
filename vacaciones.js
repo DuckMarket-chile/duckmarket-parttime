@@ -420,10 +420,18 @@
         }));
         render(); return;
       }
-      if (acc === 'reem-todos' || acc === 'reem-solo') {
+      if (acc === 'reem-cancelar' || acc === 'reem-este' || acc === 'reem-resto') {
         const form = $('#reem-form', st.v);
         const origen = form.querySelector('[data-dia="' + b.dataset.dia + '"]');
-        aplicarPlantilla(form, origen, JSON.parse(decodeURIComponent(b.dataset.plant)), acc === 'reem-todos');
+        if (acc === 'reem-cancelar') {
+          // vuelve el día a como estaba antes del cambio
+          const previo = JSON.parse(origen.dataset.prev || '{}');
+          Object.keys(previo).forEach((k) => { const x = origen.querySelector('[data-campo="' + k + '"]'); if (x) x.value = previo[k]; });
+          mostrarCampos(origen); ajustarHasta(origen);
+        } else if (acc === 'reem-resto') {
+          const leer = (k) => { const x = origen.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
+          aplicarPlantilla(form, origen, { tipo: leer('tipo'), persona: leer('persona'), nombre: leer('nombre'), rut: leer('rut'), desde: leer('desde'), hasta: leer('hasta') }, true);
+        }
         form.querySelectorAll('#reem-aviso').forEach((x) => x.remove());
         return;
       }
@@ -528,9 +536,10 @@
     const aviso = document.createElement('div');
     aviso.id = 'reem-aviso';
     aviso.setAttribute('style', 'margin:10px 0;padding:12px;border:1px solid #f0d28a;background:#fff8e6;border-radius:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:14px');
-    aviso.innerHTML = '<span>Ya hay ' + distintas + ' día(s) con otro reemplazo. ¿Cambiarlos también a este?</span>' +
-      '<button type="button" class="btn ama chico" data-acc="reem-todos" data-dia="' + fila.dataset.dia + '" data-plant="' + encodeURIComponent(JSON.stringify(plantilla)) + '">Cambiar todos</button>' +
-      '<button type="button" class="btn chico" data-acc="reem-solo" data-dia="' + fila.dataset.dia + '" data-plant="' + encodeURIComponent(JSON.stringify(plantilla)) + '">Solo este día</button>';
+    aviso.innerHTML = '<span>Ya hay ' + distintas + ' día(s) con otro reemplazo. ¿Qué hacemos?</span>' +
+      '<button type="button" class="btn chico" data-acc="reem-cancelar" data-dia="' + fila.dataset.dia + '">Cancelar</button>' +
+      '<button type="button" class="btn chico" data-acc="reem-este" data-dia="' + fila.dataset.dia + '">Reemplazar este día</button>' +
+      '<button type="button" class="btn ama chico" data-acc="reem-resto" data-dia="' + fila.dataset.dia + '">Reemplazar el resto</button>';
     form.insertBefore(aviso, form.firstChild);
   }
   // "hasta" no puede ser anterior a "desde"
@@ -656,6 +665,15 @@
       if (!v.dataset.listo) {
         v.dataset.listo = '1';
         v.addEventListener('click', accion);
+        v.addEventListener('focusin', (ev) => {
+          const fila = ev.target.closest && ev.target.closest('#reem-form [data-dia]');
+          if (!fila) return;
+          const valores = {};
+          ['tipo', 'persona', 'nombre', 'rut', 'desde', 'hasta', 'entrada', 'salida'].forEach((k) => {
+            const x = fila.querySelector('[data-campo="' + k + '"]'); valores[k] = x ? x.value : '';
+          });
+          fila.dataset.prev = JSON.stringify(valores);
+        });
         v.addEventListener('change', (ev) => {
           const campo = ev.target.dataset ? ev.target.dataset.campo : '';
           if (campo === 'rut') {
