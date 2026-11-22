@@ -310,5 +310,8 @@
     quincenaDe, quincenaDeClave, quincenaTxt, ultimasQuincenas, calcHoras, parseHora, num, peso, horasTxt,
     normNombre, normRut, formatearRut, nombrePropio, variantes, buscarPersona, sugerirPersonas,
     resumenQuincena, quincenaConPagos, leerCartolaMP, personaDeDestinatario, saldosPorPersona, conciliar, cobertura };
+  // funciones que cumple cada persona en el turno (Part-Time)
+  L.FUNCIONES = [['CAJA', 'Caja'], ['ROTICERIA', 'Rotisería'], ['REPONEDOR', 'Reponedor'], ['ENCARGADO', 'Encargado'], ['PANADERIA', 'Panadería']];
+  L.nombreFuncion = (c) => { const f = L.FUNCIONES.find((x) => x[0] === c); return f ? f[1] : ''; };
   if (typeof module !== 'undefined' && module.exports) module.exports = L; else raiz.L = L;
 })(this);

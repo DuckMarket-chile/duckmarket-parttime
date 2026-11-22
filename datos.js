@@ -50,7 +50,7 @@
         if (f.desde) q = q.gte('fecha', f.desde); if (f.hasta) q = q.lte('fecha', f.hasta); if (f.sucursal) q = q.eq('sucursal', f.sucursal); return q; }),
       async guardarTurno(t) {
         const campos = { fecha: t.fecha, sucursal: t.sucursal, nombre: t.nombre, rut: t.rut || '', entrada: t.entrada, salida: t.salida,
-          colacion: t.colacion || 0, pago: t.pago || 0, locomocion: t.locomocion || 0, obs: t.obs || '' };
+          colacion: t.colacion || 0, pago: t.pago || 0, locomocion: t.locomocion || 0, obs: t.obs || '', funcion: t.funcion || '' };
         return t.id ? ok(await sb.from('turnos').update(campos).eq('id', t.id).select().single())
                     : ok(await sb.from('turnos').insert(campos).select().single());
       },
@@ -85,7 +85,7 @@
         if (f.desde) q = q.gte('fecha', f.desde); if (f.hasta) q = q.lte('fecha', f.hasta); if (f.sucursal) q = q.eq('sucursal', f.sucursal); return q; }),
       async guardarPlan(p) {
         const c = { fecha: p.fecha, sucursal: p.sucursal, nombre: p.nombre, rut: p.rut || '', entrada: p.entrada, salida: p.salida,
-          colacion: p.colacion || 0, pago: p.pago || 0, locomocion: p.locomocion || 0, obs: p.obs || '' };
+          colacion: p.colacion || 0, pago: p.pago || 0, locomocion: p.locomocion || 0, obs: p.obs || '', funcion: p.funcion || '' };
         return p.id ? ok(await sb.from('plan').update(c).eq('id', p.id).select().single()) : ok(await sb.from('plan').insert(c).select().single());
       },
       async cancelarPlan(id, motivo) { ok(await sb.from('plan').update({ estado: 'CANCELADO', motivo: motivo || '' }).eq('id', id)); },
@@ -255,7 +255,7 @@
         const v = plan.find((x) => x.id === id); exigir(v && planifica(v.sucursal), 'Sin permiso para confirmar.');
         exigir(v.fecha <= L.hoyChile(), 'Solo se puede confirmar el mismo día o después.'); exigir(v.estado === 'PLANIFICADO', 'Esta planificación ya está ' + v.estado.toLowerCase() + '.');
         let tid = existente;
-        if (!tid) { reglasTurno(null, v); tid = crearTurno({ fecha: v.fecha, sucursal: v.sucursal, nombre: v.nombre, rut: v.rut, entrada: t.entrada, salida: t.salida, colacion: t.colacion || 0, pago: t.pago, locomocion: t.locomocion, obs: t.obs || '' }).id; }
+        if (!tid) { reglasTurno(null, v); tid = crearTurno({ fecha: v.fecha, sucursal: v.sucursal, nombre: v.nombre, rut: v.rut, funcion: v.funcion || '', entrada: t.entrada, salida: t.salida, colacion: t.colacion || 0, pago: t.pago, locomocion: t.locomocion, obs: t.obs || '' }).id; }
         Object.assign(v, { estado: 'ASISTIÓ', turno_id: tid, confirmado_por: perfil.usuario, confirmado_el: new Date().toISOString(), entrada: t.entrada, salida: t.salida, pago: t.pago, locomocion: t.locomocion });
         anotar('ASISTENCIA CONFIRMADA', 'plan', v); return tid;
       },

@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.22.7';
+  const VERSION = '2026.11.22.8';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -275,13 +275,13 @@
       const acc = [];
       if (tiene('Modificar') && escribibles().indexOf(t.sucursal) >= 0 && puedeEditarFecha(t.fecha)) acc.push('<button class="btn chico" data-acc="editar" data-id="' + t.id + '">Editar</button>');
       if (tiene('Eliminar') && escribibles().indexOf(t.sucursal) >= 0 && puedeEditarFecha(t.fecha)) acc.push('<button class="btn chico peligro" data-acc="eliminar" data-id="' + t.id + '" aria-label="Eliminar turno de ' + esc(t.nombre) + '">Eliminar</button>');
-      filas.push({ orden: t.entrada, html: '<tr' + (editar && editar.id === t.id ? ' class="sel"' : '') + '><td class="fuerte" data-t="Persona">' + esc(t.nombre) + (t.obs ? '<div class="nota">' + esc(t.obs) + '</div>' : '') + '</td><td class="gris" data-t="Sucursal">' + esc(t.sucursal) + '</td><td data-t="Horario">' + t.entrada + ' – ' + t.salida + '</td><td class="num" data-t="Horas">' + L.horasTxt(t.horas) + '</td>' +
+      filas.push({ orden: t.entrada, html: '<tr' + (editar && editar.id === t.id ? ' class="sel"' : '') + '><td class="fuerte" data-t="Persona">' + esc(t.nombre) + (t.obs ? '<div class="nota">' + esc(t.obs) + '</div>' : '') + '</td><td class="gris" data-t="Sucursal">' + esc(t.sucursal) + (t.funcion ? '<div class="nota">' + esc(L.nombreFuncion(t.funcion)) + '</div>' : '') + '</td><td data-t="Horario">' + t.entrada + ' – ' + t.salida + '</td><td class="num" data-t="Horas">' + L.horasTxt(t.horas) + '</td>' +
         '<td class="num" data-t="Pago">' + pesoV(t.pago) + '</td><td class="num gris" data-t="Locom.">' + (Number(t.locomocion) ? pesoV(t.locomocion) : '—') + '</td><td class="num fuerte" data-t="Total">' + pesoV(t.total) + '</td>' +
         '<td data-t="Estado">' + (p ? est('Planificado · asistió', 'ok') : est('Registrado', 'ok')) + '</td><td data-t=""><div class="botones">' + acc.join('') + '</div></td></tr>' });
     }
     for (const p of pend.concat(noAsis)) {
       const acc = p.estado === 'PLANIFICADO' && puedePlan(p) ? '<button class="btn chico pri" data-acc="asistio" data-id="' + p.id + '">Asistió</button><button class="btn chico peligro" data-acc="noasistio" data-id="' + p.id + '">No asistió</button>' : '';
-      filas.push({ orden: p.entrada, html: '<tr><td class="fuerte" data-t="Persona">' + esc(p.nombre) + (p.motivo ? '<div class="nota">' + esc(p.motivo) + '</div>' : '') + '</td><td class="gris" data-t="Sucursal">' + esc(p.sucursal) + '</td><td data-t="Horario">' + p.entrada + ' – ' + p.salida + '</td><td class="num" data-t="Horas">' + L.horasTxt(p.horas) + '</td>' +
+      filas.push({ orden: p.entrada, html: '<tr><td class="fuerte" data-t="Persona">' + esc(p.nombre) + (p.motivo ? '<div class="nota">' + esc(p.motivo) + '</div>' : '') + '</td><td class="gris" data-t="Sucursal">' + esc(p.sucursal) + (p.funcion ? '<div class="nota">' + esc(L.nombreFuncion(p.funcion)) + '</div>' : '') + '</td><td data-t="Horario">' + p.entrada + ' – ' + p.salida + '</td><td class="num" data-t="Horas">' + L.horasTxt(p.horas) + '</td>' +
         '<td class="num" data-t="Pago">' + pesoV(p.pago) + '</td><td class="num gris" data-t="Locom.">' + (Number(p.locomocion) ? pesoV(p.locomocion) : '—') + '</td><td class="num gris" data-t="Total">' + pesoV(p.total) + '</td>' +
         '<td data-t="Estado">' + (p.estado === 'PLANIFICADO' ? est(p.fecha > hoy() ? 'Planificado' : 'Planificado · por confirmar', 'info') : est('No asistió', 'mal')) + '</td><td data-t=""><div class="botones">' + acc + '</div></td></tr>' });
     }
@@ -307,6 +307,7 @@
       (puedeReg ? '<form class="caja" id="f-turno" autocomplete="off"><div class="caja-tit"><h2>' + (e.id ? 'Modificar turno N°' + e.id : 'Registrar turno') + '</h2>' + (e.id ? '<button type="button" class="btn chico" data-acc="nuevo">Nuevo</button>' : '') + '</div>' +
         (escribibles().length > 1 ? '<label class="campo">Sucursal<select name="sucursal">' + opciones(escribibles(), sucForm) + '</select></label>' : '<input type="hidden" name="sucursal" value="' + esc(sucForm) + '">') +
         '<label class="campo">Persona (nombre o RUT)<input name="nombre" required value="' + esc(e.nombre || '') + '" autocomplete="off"></label><div class="sugerencias oculto" id="sug"></div><div id="aviso-plan"></div>' +
+        '<label class="campo">Función<select name="funcion" required><option value="">Elegir…</option>' + opciones(L.FUNCIONES, e.funcion || '') + '</select></label>' +
         '<div class="campos2"><label class="campo">Entrada<input name="entrada" type="time" required value="' + esc(e.entrada || '09:00') + '"></label><label class="campo">Salida<input name="salida" type="time" required value="' + esc(e.salida || '15:00') + '"></label>' +
         '<label class="campo">Colación (min)<input name="colacion" type="number" min="0" step="5" value="' + esc(e.colacion || 0) + '"></label><label class="campo">Pago del turno<input name="pago" inputmode="numeric" required value="' + esc(e.pago != null ? e.pago : '') + '"></label></div>' +
         '<label class="campo">Locomoción (opcional)<input name="locomocion" inputmode="numeric" value="' + esc(Number(e.locomocion) ? e.locomocion : '') + '" placeholder="0"></label>' +
@@ -332,8 +333,8 @@
       }
       if (a === 'asistio') { const p = plan.find((x) => String(x.id) === b.dataset.id); if (await confirmarAsistencia(p, turnosQ)) vistaRegistro(v); }
       if (a === 'noasistio') { const p = plan.find((x) => String(x.id) === b.dataset.id); if (await marcarNoAsistio(p)) vistaRegistro(v); }
-      if (a === 'exportar') descargarExcel('PartTime_' + f + '.csv', [['N°', 'Fecha', 'Sucursal', 'Nombre', 'RUT', 'Entrada', 'Salida', 'Colación', 'Horas', 'Pago', 'Locomoción', 'Total', 'Observación', 'Registrado por']]
-        .concat(turnos.map((t) => [t.id, L.fechaTxt(t.fecha), t.sucursal, t.nombre, t.rut, t.entrada, t.salida, t.colacion, L.horasTxt(t.horas), montos() ? t.pago : '', montos() ? t.locomocion : '', montos() ? t.total : '', t.obs, t.creado_por])));
+      if (a === 'exportar') descargarExcel('PartTime_' + f + '.csv', [['N°', 'Fecha', 'Sucursal', 'Función', 'Nombre', 'RUT', 'Entrada', 'Salida', 'Colación', 'Horas', 'Pago', 'Locomoción', 'Total', 'Observación', 'Registrado por']]
+        .concat(turnos.map((t) => [t.id, L.fechaTxt(t.fecha), t.sucursal, L.nombreFuncion(t.funcion), t.nombre, t.rut, t.entrada, t.salida, t.colacion, L.horasTxt(t.horas), montos() ? t.pago : '', montos() ? t.locomocion : '', montos() ? t.total : '', t.obs, t.creado_por])));
     };
 
     const form = $('#f-turno', v);
@@ -357,7 +358,7 @@
     form.addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const per = nombreOficial(form.nombre.value);
-      const t = { id: form.id.value ? Number(form.id.value) : null, fecha: f, sucursal: form.sucursal.value, nombre: per.nombre, rut: per.rut || (e.rut || ''),
+      const t = { id: form.id.value ? Number(form.id.value) : null, fecha: f, sucursal: form.sucursal.value, nombre: per.nombre, rut: per.rut || (e.rut || ''), funcion: form.funcion.value,
         entrada: form.entrada.value, salida: form.salida.value, colacion: L.num(form.colacion.value), pago: L.num(form.pago.value), locomocion: L.num(form.locomocion.value), obs: form.obs.value.trim() };
       if (!t.nombre) return mensaje('Escribe el nombre de la persona.', true);
       // feriados irrenunciables: no se registran turnos (la base también lo impide)
@@ -441,6 +442,7 @@
         '<div class="progreso"><div style="width:' + pct + '%;background:' + (cob.asign >= cob.pedida ? '#1F7A4A' : '#D99A00') + '"></div></div>' +
         '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Horario</th><th class="num">Pago</th><th>Estado</th><th><span class="sr">Acciones</span></th></tr></thead><tbody>' + filas + filasLibres + '</tbody></table></div>' +
         (puede && dia.fecha >= hoy() ? '<form id="f-plan" class="campos-auto ayuda" autocomplete="off"><label class="campo" style="grid-column:1/-1">Asignar persona<input name="nombre" required placeholder="Nombre o RUT"></label><div class="sugerencias oculto" id="sug" style="grid-column:1/-1"></div>' +
+          '<label class="campo">Función<select name="funcion" required><option value="">Elegir…</option>' + opciones(L.FUNCIONES, '') + '</select></label>' +
           '<label class="campo">Entrada<input name="entrada" type="time" required value="09:00"></label><label class="campo">Salida<input name="salida" type="time" required value="15:00"></label>' +
           '<label class="campo">Pago<input name="pago" inputmode="numeric" required></label><label class="campo">Locomoción<input name="locomocion" inputmode="numeric" placeholder="0"></label>' +
           '<label class="campo" style="grid-column:1/-1">Observación<input name="obs" placeholder="Opcional"></label><button class="btn ama" type="submit">Asignar</button></form>' : '') + '</div>' : '') + '</section>';
@@ -470,9 +472,9 @@
         try { await DB.cancelarPlan(p.id, 'Quitado por ' + S.perfil.usuario); mensaje('Asignación quitada.'); vistaPlanificador(v); } catch (e) { falla(e); }
       }
       if (b.dataset.acc === 'editar') {
-        const r = await dialogo('Editar asignación', '<p class="nota" style="margin:0"><b>' + esc(p.nombre) + '</b> · ' + L.fechaTxt(p.fecha) + '</p><div class="campos2"><label class="campo">Entrada<input name="entrada" type="time" value="' + p.entrada + '"></label><label class="campo">Salida<input name="salida" type="time" value="' + p.salida + '"></label>' +
+        const r = await dialogo('Editar asignación', '<p class="nota" style="margin:0"><b>' + esc(p.nombre) + '</b> · ' + L.fechaTxt(p.fecha) + '</p><label class="campo">Función<select name="funcion"><option value="">Sin definir</option>' + opciones(L.FUNCIONES, p.funcion || '') + '</select></label><div class="campos2"><label class="campo">Entrada<input name="entrada" type="time" value="' + p.entrada + '"></label><label class="campo">Salida<input name="salida" type="time" value="' + p.salida + '"></label>' +
           '<label class="campo">Pago<input name="pago" inputmode="numeric" value="' + Number(p.pago) + '"></label><label class="campo">Locomoción<input name="locomocion" inputmode="numeric" value="' + (Number(p.locomocion) || '') + '"></label></div><label class="campo">Observación<input name="obs" value="' + esc(p.obs) + '"></label>',
-        { boton: 'Guardar', validar: (d) => DB.guardarPlan(Object.assign({}, p, { entrada: d.entrada, salida: d.salida, pago: L.num(d.pago), locomocion: L.num(d.locomocion), obs: d.obs })).then(() => null) });
+        { boton: 'Guardar', validar: (d) => DB.guardarPlan(Object.assign({}, p, { funcion: d.funcion, entrada: d.entrada, salida: d.salida, pago: L.num(d.pago), locomocion: L.num(d.locomocion), obs: d.obs })).then(() => null) });
         if (r) { mensaje('Asignación actualizada.'); vistaPlanificador(v); }
       }
     };
@@ -484,7 +486,7 @@
         const per = nombreOficial(f.nombre.value);
         if (delDia.some((p) => p.estado !== 'CANCELADO' && L.normNombre(p.nombre) === L.normNombre(per.nombre)) && !(await confirmar('Ya está asignada', per.nombre + ' ya está asignada este día. ¿Asignarla otra vez?'))) return;
         try {
-          await DB.guardarPlan({ fecha: dia.fecha, sucursal: suc, nombre: per.nombre, rut: per.rut, entrada: f.entrada.value, salida: f.salida.value, pago: L.num(f.pago.value), locomocion: L.num(f.locomocion.value), obs: f.obs.value.trim() });
+          await DB.guardarPlan({ fecha: dia.fecha, sucursal: suc, nombre: per.nombre, rut: per.rut, funcion: f.funcion.value, entrada: f.entrada.value, salida: f.salida.value, pago: L.num(f.pago.value), locomocion: L.num(f.locomocion.value), obs: f.obs.value.trim() });
           mensaje(per.nombre + ' asignada al ' + L.fechaTxt(dia.fecha) + '.'); vistaPlanificador(v);
         } catch (e) { falla(e); }
       });
