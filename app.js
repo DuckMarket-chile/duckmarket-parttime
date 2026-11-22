@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.21.10';
+  const VERSION = '2026.11.21.11';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -162,8 +162,8 @@
     { id: 'reportes', txt: 'Reportes', ve: () => tiene('VerResumen') || tiene('ReportesPlan') },
     { id: 'historial', txt: 'Historial de cambios', ve: () => tiene('Historial') },
     { id: 'usuarios', txt: 'Usuarios y permisos', ve: () => S.perfil.admin || tiene('Usuarios') },
-    { grupo: 'VACACIONES DE PLANTA' },
     { id: 'respaldo', txt: 'Respaldo de datos', ve: () => !!S.perfil.admin },
+    { grupo: 'VACACIONES DE PLANTA' },
     { id: 'vac-publicar', txt: 'Publicar vacaciones', ve: () => !!S.perfil.admin && !!S.vacAcceso },
     { id: 'vac-resumen', txt: 'Resumen', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-calendario', txt: 'Calendario por local', ve: () => !!S.vacAcceso && !!S.vacPublicado },
