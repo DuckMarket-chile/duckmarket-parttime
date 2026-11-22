@@ -473,7 +473,11 @@
   // muestra solo los campos que corresponden al tipo elegido en la fila
   function mostrarCampos(fila) {
     const tipo = fila.querySelector('[data-campo="tipo"]').value;
-    fila.querySelectorAll('[data-solo]').forEach((el) => { el.hidden = el.dataset.solo.split(' ').indexOf(tipo) < 0; });
+    // un campo sin "data-solo" (o vacío) se muestra siempre; los demás, solo para los tipos que indican
+    fila.querySelectorAll('[data-solo]').forEach((el) => {
+      const lista = el.dataset.solo.split(' ').filter(Boolean);
+      el.hidden = lista.length > 0 && lista.indexOf(tipo) < 0;
+    });
   }
   // lo que se elige en un día se copia a los días que aún no tienen reemplazo (cada día se puede cambiar después)
   function propagarPlantilla(fila) {
