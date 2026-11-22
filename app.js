@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.22.9';
+  const VERSION = '2026.11.22.10';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -764,7 +764,7 @@
     const costoReal = turnos.filter((t) => planes.some((p) => p.turno_id === t.id)).reduce((a, t) => a + Number(t.total), 0);
     const meses = []; for (let i = 0; i < 12; i++) { const d = new Date(Number(hoy().slice(0, 4)), Number(hoy().slice(5, 7)) - 1 - i, 1); meses.push([L.iso(d).slice(0, 7), L.MESES[d.getMonth()] + ' ' + d.getFullYear()]); }
     // panaderos: sus pagos se tratan aparte, así que van en una tabla propia
-    const armarPersonas = (lista) => { const m = new Map(); lista.forEach((t) => { const k = t.nombre; const x = m.get(k) || { nombre: k, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); m.set(k, x); }); return [...m.values()].sort((a, b) => b.total - a.total); };
+    const armarPersonas = (lista) => { const m = new Map(); lista.forEach((t) => { const k = t.nombre; const x = m.get(k) || { nombre: k, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); m.set(k, x); }); return [...m.values()].filter((x) => x.total > 0).sort((a, b) => b.total - a.total); };  // solo quienes tienen pagos asignados
     const pers = armarPersonas(turnos.filter((t) => t.funcion !== 'PANADERIA'));
     const persPan = armarPersonas(turnos.filter((t) => t.funcion === 'PANADERIA'));
     v.innerHTML = cabecera('Reportes', 'Resumen del mes y cumplimiento de la planificación.', '<label class="campo">Mes<select id="r-mes">' + opciones(meses, mes) + '</select></label>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
