@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.22.10';
+  const VERSION = '2026.11.22.11';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -708,7 +708,7 @@
   async function vistaPersonas(v, texto, selId) {
     const lista = await DB.personas();
     const t = L.normNombre(texto || '');
-    const vis = lista.filter((p) => !t || L.variantes(p).some((x) => L.normNombre(x).includes(t)) || L.normRut(p.rut).includes(L.normRut(texto)));
+    const vis = lista.filter((p) => !t || L.variantes(p).some((x) => L.normNombre(x).includes(t)) || (/\d/.test(texto || '') && L.normRut(p.rut).includes(L.normRut(texto))));  // RUT solo si se escribieron números (vacío coincidía con todo)
     const p = selId === 'nueva' ? { activo: true } : lista.find((x) => x.id === selId) || null;
     const campo = (k, tit, extra) => '<label class="campo">' + tit + '<input name="' + k + '" value="' + esc(p[k] || '') + '"' + (extra || '') + '></label>';
     const edita = tiene('EditarPersonas');
