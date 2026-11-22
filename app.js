@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.21.9';
+  const VERSION = '2026.11.21.10';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -42,7 +42,7 @@
     historial: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
     usuarios: '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 018 0v4"></path>',
     buscar: '<circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>',
-    'vac-publicar': '<path d="M12 19V5M5 12l7-7 7 7"></path>', 'vac-resumen': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-calendario': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-general': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-solicitud': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-aprobacion': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-reportes': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>', 'vac-comprobantes': '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path>'
+    respaldo: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path>', 'vac-publicar': '<path d="M12 19V5M5 12l7-7 7 7"></path>', 'vac-resumen': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-calendario': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-general': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-solicitud': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-aprobacion': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-reportes': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>', 'vac-comprobantes': '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path>'
   };
   const icono = (n, t) => '<svg aria-hidden="true" width="' + (t || 18) + '" height="' + (t || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICO[n] + '</svg>';
   const est = (txt, tipo) => '<span class="est ' + tipo + '">' + esc(txt) + '</span>';
@@ -163,6 +163,7 @@
     { id: 'historial', txt: 'Historial de cambios', ve: () => tiene('Historial') },
     { id: 'usuarios', txt: 'Usuarios y permisos', ve: () => S.perfil.admin || tiene('Usuarios') },
     { grupo: 'VACACIONES DE PLANTA' },
+    { id: 'respaldo', txt: 'Respaldo de datos', ve: () => !!S.perfil.admin },
     { id: 'vac-publicar', txt: 'Publicar vacaciones', ve: () => !!S.perfil.admin && !!S.vacAcceso },
     { id: 'vac-resumen', txt: 'Resumen', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-calendario', txt: 'Calendario por local', ve: () => !!S.vacAcceso && !!S.vacPublicado },
@@ -1005,7 +1006,44 @@
     'vac-resumen': (v) => window.VAC.vista(v, 'resumen'), 'vac-calendario': (v) => window.VAC.vista(v, 'local'),
     'vac-general': (v) => window.VAC.vista(v, 'general'), 'vac-solicitud': (v) => window.VAC.vista(v, 'solicitud'),
     'vac-aprobacion': (v) => window.VAC.vista(v, 'aprobacion'), 'vac-reportes': (v) => window.VAC.vista(v, 'reportes'),
-    'vac-comprobantes': (v) => window.VAC.vista(v, 'comprobantes'), 'vac-publicar': (v) => window.VAC.vistaPublicar(v) };
+    'vac-comprobantes': (v) => window.VAC.vista(v, 'comprobantes'), 'vac-publicar': (v) => window.VAC.vistaPublicar(v), respaldo: (v) => vistaRespaldo(v) };
+
+  // ================================================================== respaldo de datos (solo administración)
+  // Descarga un archivo JSON con las tablas de Part-Time y de vacaciones. Contiene RUT y datos personales: guardarlo en un lugar privado.
+  const TABLAS_RESPALDO = ['personas', 'turnos', 'abonos', 'plan', 'dias', 'feriados', 'roles', 'perfiles', 'historial',
+    'vac_personal', 'vac_personal_rut', 'vac_puestos', 'vac_restricciones', 'vac_feriados', 'vac_accesos', 'vac_solicitudes', 'vac_bitacora', 'vac_config'];
+  async function exportarRespaldo(progreso) {
+    const sb = DB.cliente ? DB.cliente() : null;
+    if (!sb) throw new Error('El respaldo solo funciona con la base conectada (no en modo de prueba).');
+    const out = { generado: new Date().toISOString(), tablas: {} };
+    for (const t of TABLAS_RESPALDO) {
+      if (progreso) progreso('Respaldando ' + t + '…');
+      let filas = [], i = 0;
+      for (;;) {
+        const r = await sb.from(t).select('*').range(i, i + 999);
+        if (r.error) { out.tablas[t] = { error: r.error.message }; break; }
+        filas = filas.concat(r.data);
+        if (r.data.length < 1000) { out.tablas[t] = filas; break; }
+        i += 1000;
+      }
+    }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
+    a.download = 'respaldo_partime_' + new Date().toISOString().slice(0, 10) + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    return out;
+  }
+  function vistaRespaldo(v) {
+    v.innerHTML = cabecera('Respaldo de datos', 'Descarga una copia de Part-Time y de vacaciones. Guárdala en un lugar privado.') +
+      '<section class="zona"><div class="caja"><p>La copia incluye personas, RUT, turnos, pagos y solicitudes de vacaciones.</p>' +
+      '<div class="botones"><button class="btn ama" id="b-respaldo" type="button">Descargar respaldo ahora</button></div></div></section>';
+    $('#b-respaldo').onclick = async () => {
+      const b = $('#b-respaldo'); b.disabled = true;
+      try { await exportarRespaldo((txt) => { b.textContent = txt; }); mensaje('Respaldo descargado.'); }
+      catch (e) { falla(e); }
+      finally { b.disabled = false; b.textContent = 'Descargar respaldo ahora'; }
+    };
+  }
   const VACDIR = () => !!S.vacAcceso && (S.vacAcceso.rol === 'administracion' || S.vacAcceso.rol === 'gerencia');
 
   // ================================================================== versión y aviso de actualización
