@@ -156,17 +156,25 @@
       '<h3 class="vac-sub">Solicitudes de mi local</h3>' + listaSolicitudes(true);
   }
   // puesto: fijo si la persona lo tiene en su ficha; si no (roticeras y reponedores que rotan), se elige
-  function pintarPuesto() {
+  async function pintarPuesto() {
     const per = st.personal.find((p) => String(p.id) === $('#f-per').value);
     const caja = $('#f-pue-caja');
     if (per && per.puesto) {
       caja.innerHTML = '<p class="vac-nota">Puesto fijo: <b>' + esc(per.puesto) + '</b></p>';
       caja.dataset.puesto = per.puesto;
-    } else {
-      caja.innerHTML = '<label class="campo"><span>Puesto (esta persona rota, elígelo)</span><select id="f-pue">' +
-        st.puestos.filter((p) => p.local === localSol() && p.cargo === per.cargo).map((p) => '<option>' + esc(p.puesto) + '</option>').join('') + '</select></label>';
-      caja.dataset.puesto = '';
+      return;
     }
+    const todos = per ? st.puestos.filter((p) => p.local === localSol() && p.cargo === per.cargo) : [];
+    const turnos = todos.filter((p) => /^Turno (AM|PM) \(/.test(p.puesto));
+    // solo quien tiene rotación elige turno AM/PM; los demás siguen con la lista de puestos
+    const r = per && turnos.length ? await st.sb.rpc('vac_patron_personal', { p_personal_id: per.id }) : null;
+    if (!per || String(per.id) !== $('#f-per').value) return; // cambió la persona mientras cargaba
+    const rotativo = !!r && !r.error && r.data === 'rotativo';
+    const opts = rotativo
+      ? turnos.map((p) => '<option value="' + esc(p.puesto) + '">' + esc(p.puesto.replace(/ \(.*\)$/, '')) + '</option>').join('')
+      : todos.filter((p) => turnos.indexOf(p) < 0).map((p) => '<option>' + esc(p.puesto) + '</option>').join('');
+    caja.innerHTML = '<label class="campo"><span>' + (rotativo ? 'Turno (esta persona rota)' : 'Puesto') + '</span><select id="f-pue">' + opts + '</select></label>';
+    caja.dataset.puesto = '';
   }
   function puestoElegido() {
     const caja = $('#f-pue-caja');
