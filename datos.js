@@ -37,6 +37,7 @@
     }
     return {
       demo: false,
+      cliente: () => sb,   // Vacaciones usa el mismo cliente de Supabase para leer su acceso y sus datos
       async sesion() { const { data } = await sb.auth.getSession(); return data.session ? cargarPerfil() : null; },
       async entrar(usuario, clave) {
         ok(await sb.auth.signInWithPassword({ email: correoDe(usuario), password: clave }));
