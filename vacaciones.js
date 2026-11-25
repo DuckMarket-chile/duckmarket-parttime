@@ -336,7 +336,7 @@
   }
   function vistaReportes() {
     const r = st.rep, locs = localesRep();
-    if (r.vista === 'reemplazos' && !st.partime && !st.cargandoPartime) {
+    if (['reemplazos', 'reemdia', 'reemnombre', 'calreem'].indexOf(r.vista) >= 0 && !st.partime && !st.cargandoPartime) {
       st.cargandoPartime = true;
       leerPersonas().then((x) => { st.partime = Array.isArray(x) ? x : []; render(); }).catch(() => { st.partime = []; render(); });
     }
@@ -344,7 +344,7 @@
     const [y, m] = MESES[r.mes];
     const selLoc = locs.length > 1 ? '<select id="rep-loc">' + locs.map((l) => '<option' + (l === r.local ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '<span class="vac-tag">' + esc(r.local) + '</span>';
     const selMes = '<select id="rep-mes">' + MESES.map((mm, i) => '<option value="' + i + '"' + (i === r.mes ? ' selected' : '') + '>' + mm[2] + '</option>').join('') + '</select>';
-    const selVista = '<select id="rep-vista">' + [['mensual', 'Mensual'], ['semanal', 'Semanal'], ['listado', 'Listado completo'], ['reemplazos', 'Reemplazos por persona que sale'], ['saldos', 'Saldos del personal']].map(([k, t]) => '<option value="' + k + '"' + (r.vista === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
+    const selVista = '<select id="rep-vista">' + [['mensual', 'Mensual'], ['semanal', 'Semanal'], ['listado', 'Listado completo'], ['reemplazos', 'Reemplazos por persona que sale'], ['reemdia', 'Reemplazos por día (detalle)'], ['reemnombre', 'Reemplazos por nombre'], ['calreem', 'Calendario de reemplazos'], ['saldos', 'Saldos del personal']].map(([k, t]) => '<option value="' + k + '"' + (r.vista === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
     const selEst = '<select id="rep-estado">' + [['aprobada', 'Solo aprobadas'], ['todas', 'Todas (pendientes incluidas)']].map(([k, t]) => '<option value="' + k + '"' + (r.estado === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
     const barra = '<div class="vac-barra vac-no-imprimir">' + selLoc + selMes + selVista + selEst +
       '<button type="button" class="btn" data-acc="rep-excel">Exportar a Excel</button><button type="button" class="btn" data-acc="rep-imprimir">Imprimir / PDF</button></div>';
@@ -370,6 +370,44 @@
           x.dias_pendientes != null ? String(Number(x.dias_pendientes).toFixed(1)) : '—',
           x.dias_acumulados != null ? String(Number(x.dias_acumulados).toFixed(1)) : '—',
           x.saldo_al ? f2(x.saldo_al) : '—']) };
+    }
+    const mKey = (() => { const [yy, mm] = MESES[r.mes]; return yy + '-' + String(mm + 1).padStart(2, '0'); })();
+    const reemsMes = (lista) => (st.reemplazos || []).filter((x) => String(x.fecha).slice(0, 7) === mKey && lista.some((s2) => s2.id === x.solicitud_id));
+    if (r.vista === 'reemdia') {
+      const f3 = (d) => dDe(d).toLocaleDateString('es-CL');
+      const filas = reemsMes(sols).sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)) || reemNombre(a).localeCompare(reemNombre(b))).map((x) => {
+        const s2 = sols.find((q) => q.id === x.solicitud_id) || {};
+        return [f3(x.fecha), reemNombre(x), nom(s2), horaCorta(x.entrada) + '–' + horaCorta(x.salida)];
+      });
+      return { cabecera: ['Fecha', 'Reemplazante', 'Reemplaza a', 'Horario'], filas };
+    }
+    if (r.vista === 'reemnombre') {
+      const grupos = {};
+      reemsMes(sols).forEach((x) => { const n = reemNombre(x); (grupos[n] = grupos[n] || []).push(x); });
+      const filas = Object.keys(grupos).sort((a, b) => a.localeCompare(b)).map((n) => {
+        const lst = grupos[n].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)));
+        const txt = lst.map((x) => dDe(x.fecha).getDate() + ' ' + CORTO_DIA[dDe(x.fecha).getDay()] + ' ' + horaCorta(x.entrada) + '–' + horaCorta(x.salida)).join(' · ');
+        return [n, String(lst.length), txt];
+      });
+      return { cabecera: ['Reemplazante', 'Días', 'Días y horarios'], filas };
+    }
+    if (r.vista === 'calreem') {
+      const [yy, mm] = MESES[r.mes];
+      const dias = new Date(yy, mm + 1, 0).getDate();
+      const todos = localesRep().reduce((acc, l) => acc.concat(solsReporte(l, r.estado)), []);
+      const lst = reemsMes(todos);
+      const nombres = [...new Set(lst.map(reemNombre))].sort((a, b) => a.localeCompare(b));
+      const cab = ['Reemplazante'].concat(Array.from({ length: dias }, (_, i) => String(i + 1)));
+      const filas = nombres.map((n) => {
+        const fila = [n];
+        for (let d = 1; d <= dias; d++) {
+          const dk = mKey + '-' + String(d).padStart(2, '0');
+          const x = lst.find((q) => reemNombre(q) === n && String(q.fecha) === dk);
+          fila.push(x ? horaCorta(x.entrada) + '–' + horaCorta(x.salida) : '');
+        }
+        return fila;
+      });
+      return { cabecera: cab, filas };
     }
     if (r.vista === 'reemplazos') {
       const f3 = (d) => dDe(d).toLocaleDateString('es-CL');
@@ -402,6 +440,7 @@
         return [rot(a) + ' al ' + rot(b), quienes.join(', ') || '—', String(quienes.length)];
       }) };
   }
+  function horaCorta(h) { return h ? String(h).slice(0, 5) : '—'; }
   function reemNombre(x) {
     if (x.tipo === 'INTERNO') return (st.personal.find((p) => p.id === x.personal_id) || {}).nombre || 'Del local';
     if (x.tipo === 'PARTTIME') return ((st.partime || []).find((p) => p.id === x.persona_id) || {}).nombre || 'Part-time';
