@@ -416,12 +416,11 @@
         const id = Number(b.dataset.id);
         if (st.reemAbierta === id) { st.reemAbierta = null; render(); return; }
         const s = st.sol.find((x) => x.id === id);
-        st.reemAbierta = id; st.reemPre = {};
+        st.reemAbierta = id; st.reemPre = {}; st.reemBloque = '';
         if (!st.partime) st.partime = await leerPersonas();
-        await Promise.all(diasAsignables(s).map(async (f) => {
-          const r = await st.sb.rpc('vac_horario_precargado', { p_personal_id: s.personal_id, p_fecha: f });
-          if (!r.error && r.data && r.data[0]) st.reemPre[f] = r.data[0];
-        }));
+        const pat = await st.sb.rpc('vac_patron_personal', { p_personal_id: s.personal_id });
+        st.reemPatron = (!pat.error && pat.data) || 'fijo';
+        if (st.reemPatron === 'fijo') await precargarFijo(s);
         render(); return;
       }
       if (acc === 'reem-cancelar' || acc === 'reem-este' || acc === 'reem-resto') {
@@ -615,8 +614,38 @@
     h.min = d.value || '';
     if (d.value && h.value && h.value < d.value) h.value = d.value;
   }
+  // horario por defecto: fijos según su último mismo día de la semana; rotativos según el bloque (AM/PM) elegido
+  async function precargarDias(s, fn) {
+    st.reemPre = {};
+    await Promise.all(diasAsignables(s).map(async (f) => {
+      const r = await fn(f);
+      if (!r.error && r.data && r.data[0]) st.reemPre[f] = r.data[0];
+    }));
+  }
+  async function precargarFijo(s) {
+    await precargarDias(s, (f) => st.sb.rpc('vac_horario_precargado', { p_personal_id: s.personal_id, p_fecha: f }));
+  }
+  // al elegir AM o PM: llena entrada y salida de los días sin reemplazo guardado, sin rehacer la pantalla
+  async function precargarRotativo(s, bloque) {
+    st.reemBloque = bloque;
+    if (bloque) await precargarDias(s, (f) => st.sb.rpc('vac_horario_rotativo', { p_personal_id: s.personal_id, p_fecha: f, p_inicio: s.inicio, p_empieza: bloque }));
+    else st.reemPre = {};
+    const form = $('#reem-form', st.v);
+    if (!form) return;
+    form.querySelectorAll('.reem-fila[data-dia]').forEach((fila) => {
+      const f = fila.dataset.dia;
+      if (reemDe(s.id, f)) return;
+      const pre = st.reemPre[f];
+      const ent = fila.querySelector('[data-campo="entrada"]'), sal = fila.querySelector('[data-campo="salida"]');
+      if (ent) ent.value = pre ? String(pre.entrada).slice(0, 5) : '';
+      if (sal) sal.value = pre ? String(pre.salida).slice(0, 5) : '';
+      fila.querySelectorAll('.vac-nota').forEach((n) => { n.textContent = pre ? '(por defecto)' : (bloque ? '(sin horario para ese bloque: ingrésalo)' : '(elige mañana o tarde arriba)'); });
+    });
+  }
   function formularioReemplazos(s) {
     const dias = diasAsignables(s), pre = st.reemPre || {};
+    const rotativo = st.reemPatron === 'rotativo';
+    const selBloque = rotativo ? '<div style="margin:10px 0;padding:12px;border:1px solid #cfe0f5;background:#f5f9ff;border-radius:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:14px"><span><b>' + esc(nombrePersona(s.personal_id)) + '</b> tiene horario rotativo. ¿Al inicio de la vacación empieza en el turno de mañana o de tarde? Desde ahí el horario alterna semana a semana.</span><select id="reem-bloque"><option value="">Elegir…</option><option value="AM"' + (st.reemBloque === 'AM' ? ' selected' : '') + '>Mañana (AM)</option><option value="PM"' + (st.reemBloque === 'PM' ? ' selected' : '') + '>Tarde (PM)</option></select></div>' : '';
     const internos = st.personal.filter((p) => p.local === s.local && p.activo !== false && p.id !== s.personal_id);
     const partime = (st.partime || []).filter((p) => p.activo !== false);
     const opciones = (sel) =>
@@ -629,7 +658,7 @@
       const sel = ex ? (ex.tipo === 'INTERNO' ? 'I:' + ex.personal_id : ex.tipo === 'PARTTIME' ? 'P:' + ex.persona_id : '') : '';
       const ent = ex ? ex.entrada : (pre[f] ? String(pre[f].entrada).slice(0, 5) : '');
       const sal = ex ? ex.salida : (pre[f] ? String(pre[f].salida).slice(0, 5) : '');
-      const nota = ex ? '' : (pre[f] ? ' <span class="vac-nota">(por defecto)</span>' : ' <span class="vac-nota">(sin horario por defecto: ingrésalo)</span>');
+      const nota = ex ? '' : (pre[f] ? ' <span class="vac-nota">(por defecto)</span>' : rotativo ? ' <span class="vac-nota">(elige mañana o tarde arriba)</span>' : ' <span class="vac-nota">(sin horario por defecto: ingrésalo)</span>');
       const campo = (txt, solo, html) => '<label data-solo="' + solo + '" style="display:flex;flex-direction:column;gap:4px;font-size:12px">' + txt + html + '</label>';
       return '<div class="reem-fila" data-dia="' + f + '" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;align-items:end;padding:10px 0;border-bottom:1px solid #eceff4">' +
         '<div style="font-size:13px"><b>' + DIAS_CORTO[d.getDay()] + ' ' + d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }) + '</b></div>' +
@@ -643,7 +672,7 @@
         campo('Salida' + nota, '', '<input type="time" data-campo="salida" value="' + esc(sal) + '">') +
         '</div>';
     }).join('');
-    return '<div id="reem-form" style="margin-top:12px"><p class="vac-nota">Hay que asignar reemplazo a <b>todas</b> las jornadas (' + dias.length + ' días). El horario por defecto es el último turno de ' + esc(nombrePersona(s.personal_id)) + ' para ese día de la semana; cámbialo si corresponde.</p>' +
+    return '<div id="reem-form" style="margin-top:12px"><p class="vac-nota">Hay que asignar reemplazo a <b>todas</b> las jornadas (' + dias.length + ' días). ' + (rotativo ? 'El horario por defecto sale del bloque de mañana o tarde que elijas arriba; cámbialo si corresponde.' : 'El horario por defecto es el último turno de ' + esc(nombrePersona(s.personal_id)) + ' para ese día de la semana; cámbialo si corresponde.') + '</p>' + selBloque +
       filas + '<div style="margin-top:12px"><button type="button" class="btn ama" data-acc="reem-guardar">Guardar reemplazos</button></div></div>';
   }
   function vistaReemplazos() {
@@ -759,6 +788,11 @@
           fila.dataset.prev = JSON.stringify(valores);
         });
         v.addEventListener('change', (ev) => {
+          if (ev.target.id === 'reem-bloque') {
+            const s = st.sol.find((x) => x.id === st.reemAbierta);
+            if (s) precargarRotativo(s, ev.target.value);
+            return;
+          }
           const campo = ev.target.dataset ? ev.target.dataset.campo : '';
           if (campo === 'rut') {
             const ok = rutNormal(ev.target.value);
