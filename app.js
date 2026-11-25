@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.25.13';
+  const VERSION = '2026.11.25.14';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -205,7 +205,7 @@
     const nomRol = { admin: 'Administrador', gerente: 'Gerente', sucursal: 'Sucursal' }[S.perfil.rol] || S.perfil.rol || '';
     const rol = S.perfil.admin ? 'Administrador' : nomRol + (S.perfil.sucursal ? ' · ' + S.perfil.sucursal : '');
     const esAdmVac = !!S.vacAcceso && (S.vacAcceso.rol === 'administracion' || S.vacAcceso.rol === 'gerencia');
-    const ayuda = S.modo === 'vac' ? 'ayuda/' + (esAdmVac ? 'Instructivo_Admin_Vacaciones.pdf' : 'Instructivo_Vacaciones.pdf') : 'ayuda/Instructivo_PartTime.pdf';
+    const ayuda = S.modo === 'vac' ? 'ayuda/' + (esAdmVac ? 'Instructivo_Admin_Vacaciones.pdf' : 'Instructivo_Vacaciones.pdf') : 'ayuda/' + (S.perfil.admin ? 'Instructivo_Admin_PartTime.pdf' : 'Instructivo_PartTime.pdf');
     document.body.innerHTML = '<div class="app"><nav class="menu" aria-label="Secciones">' +
       '<div class="marca"><div class="logo"><img src="logo_pato.png" alt="Duck Market"></div><div><b>Duck Market</b><span>' + (S.modo === 'vac' ? 'Vacaciones' : 'Part-Time') + '</span></div></div>' + items.join('') +
       '<div class="yo"><b>' + esc(S.perfil.usuario) + '</b><span>' + esc(rol) + '</span>' + (S.vacAcceso ? '<button type="button" id="b-cambiar">Cambiar de sección</button>' : '') + '<a class="ayuda-enlace" href="' + ayuda + '" target="_blank" rel="noopener" style="display:block;color:#F5B400;font-weight:600;margin:6px 0;text-decoration:none">Ayuda (instructivo)</a>' + '<button type="button" id="b-clave">Cambiar mi clave</button><button type="button" id="b-salir">Salir</button><span class="ver">Versión ' + VERSION + '</span></div></nav>' +
