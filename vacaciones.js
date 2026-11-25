@@ -6,8 +6,11 @@
   const LOCALES = ['ANDES', 'ENCINAS', 'SAN MARTIN'];
   const MESES = [[2026, 11, 'Diciembre 2026'], [2027, 0, 'Enero 2027'], [2027, 1, 'Febrero 2027'], [2027, 2, 'Marzo 2027']];
   const DIA = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+  // mes inicial: el mes actual si está en la lista; si no (antes de diciembre 2026), el primero de la lista
+  const HOY_V = new Date();
+  const MES_INI = Math.max(0, MESES.findIndex((m) => m[0] === HOY_V.getFullYear() && m[1] === HOY_V.getMonth()));
   const st = { lateral: false, sb: null, uid: null, acceso: null, personal: [], puestos: [], restr: [], feriados: new Set(), sol: [],
-    mes: 1, tab: 'resumen', local: null, aviso: '', error: '', ruts: {}, comp: null, rep: { local: null, mes: 1, vista: 'mensual', estado: 'aprobada' } };
+    mes: MES_INI, tab: 'resumen', local: null, aviso: '', error: '', ruts: {}, comp: null, rep: { local: null, mes: MES_INI, vista: 'mensual', estado: 'aprobada' } };
 
   const $ = (s, r) => (r || document).querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

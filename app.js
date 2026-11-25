@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.25.2';
+  const VERSION = '2026.11.25.3';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -985,7 +985,8 @@
 
   // ================================================================== BUSCAR PERSONA
   async function vistaBuscar(v, filtro) {
-    filtro = filtro || { nombre: '', desde: L.sumarDias(hoy(), -90), hasta: L.sumarDias(hoy(), 30) };
+    const [aY, aM] = hoy().split('-');
+    filtro = filtro || { nombre: '', desde: aY + '-' + aM + '-01', hasta: aY + '-' + aM + '-' + String(new Date(Number(aY), Number(aM), 0).getDate()).padStart(2, '0') };
     let res = '';
     if (filtro.nombre.trim()) {
       // nombre exacto de la base, o el único que calza con lo escrito (ej. "diego araya")
