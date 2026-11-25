@@ -477,12 +477,17 @@
     if (form) { $('#f-per').addEventListener('change', pintarPuesto); pintarPuesto(); }
       }
   // imprime desde una ventana aparte con solo el contenido (la impresión de la app completa sale en blanco)
-  function imprimirAparte(titulo, html) {
+  // conEstilos: el comprobante usa sus propios estilos de impresión. Los reportes NO cargan vacaciones.css:
+  // esa hoja oculta todo el cuerpo al imprimir (body * { visibility: hidden }) y dejaba la hoja en blanco.
+  function imprimirAparte(titulo, html, conEstilos) {
     const w = window.open('', '_blank');
     if (!w) { st.error = 'El navegador bloqueó la ventana de impresión: permite ventanas emergentes para este sitio y vuelve a intentar.'; render(); return; }
+    const estilos = conEstilos ? '<link rel="stylesheet" href="estilos.css"><link rel="stylesheet" href="vacaciones.css">' : '';
+    const base = '<style>body{font-family:Arial,sans-serif;font-size:12px;color:#111;margin:16px}h3{font-size:16px;margin:0 0 10px}' +
+      'table{border-collapse:collapse;width:100%}th,td{border:1px solid #bbb;padding:5px 7px;text-align:left;vertical-align:top}th{background:#eef2f6}@page{size:landscape;margin:12mm}</style>';
     w.document.open();
     w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><base href="' + esc(location.href) + '"><title>' + esc(titulo) + '</title>' +
-      '<link rel="stylesheet" href="estilos.css"><link rel="stylesheet" href="vacaciones.css"></head><body style="background:#fff;padding:16px">' + html + '</body></html>');
+      estilos + base + '</head><body style="background:#fff;padding:16px">' + html + '</body></html>');
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); }, 400);
   }
@@ -529,7 +534,7 @@
         st.aviso = n ? 'Reemplazos guardados (' + n + ' cambio' + (n === 1 ? '' : 's') + ').' : 'No había cambios que guardar.';
         render(); return;
       }
-      if (acc === 'comp-imprimir') { imprimirAparte('Comprobante de vacaciones', comprobanteHtml(st.comp)); return; }
+      if (acc === 'comp-imprimir') { imprimirAparte('Comprobante de vacaciones', comprobanteHtml(st.comp), true); return; }
       if (acc === 'rep-imprimir') {
         const r = st.rep, d = datosReporte();
         const titulo = 'Vacaciones · ' + r.local + ' · ' + MESES[r.mes][2];
@@ -772,7 +777,7 @@
       st.cargandoPartime = true;
       leerPersonas().then((x) => { st.partime = Array.isArray(x) ? x : []; render(); }).catch(() => { st.partime = []; render(); });
     }
-    return '<p class="vac-nota">Solo lectura: los reemplazos los asigna administración.</p><ul class="vac-lista">' + aprob.map((s) => {
+    return '<p class="vac-nota">Solo lectura: los reemplazos los asigna administración o el encargado del local.</p><ul class="vac-lista">' + aprob.map((s) => {
       const dias = diasAsignables(s), hechos = dias.filter((f) => reemDe(s.id, f)).length;
       const filasDia = dias.map((f) => {
         const x = reemDe(s.id, f), d = dDe(f);
@@ -786,10 +791,11 @@
     }).join('') + '</ul>';
   }
   function vistaReemplazos() {
-    const admin = !!st.acceso && st.acceso.rol === 'administracion';
-    const aprob = st.sol.filter((s) => s.estado === 'aprobada').sort((a, b) => a.inicio.localeCompare(b.inicio));
+    // administración asigna en todos los locales; el encargado solo en su local (la base también lo controla)
+    const puedeAsignar = !!st.acceso && (st.acceso.rol === 'administracion' || st.acceso.rol === 'encargado');
+    const aprob = st.sol.filter((s) => s.estado === 'aprobada' && (st.acceso.rol !== 'encargado' || s.local === st.acceso.local)).sort((a, b) => a.inicio.localeCompare(b.inicio));
     if (!aprob.length) return '<p class="vac-nota">Aún no hay solicitudes aprobadas.</p>';
-    if (!admin) return vistaReemplazosLectura(aprob);
+    if (!puedeAsignar) return vistaReemplazosLectura(aprob);
     return '<ul class="vac-lista">' + aprob.map((s) => {
       const dias = diasAsignables(s), hechos = dias.filter((f) => reemDe(s.id, f)).length;
       const abierta = st.reemAbierta === s.id;
