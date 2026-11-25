@@ -157,7 +157,7 @@ dialog form { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
 
 /* pantalla de elección de sección */
 .elegir { display: grid; gap: 18px; justify-items: center; align-content: center; min-height: 100vh; min-height: 100dvh; padding: 24px; }
-.elegir-tit { text-align: center; } .elegir-tit .logo { width: 64px; margin: 0 auto 8px; } .elegir-tit h1 { margin: 0; font-size: 24px; } .elegir-tit p { margin: 4px 0 0; color: #5b6b7a; }
+.elegir-tit { text-align: center; } .elegir-tit .logo { width: 64px; margin: 0 auto 8px; } .elegir-tit h1 { margin: 0; font-size: 24px; color: #fff; } .elegir-tit p { margin: 4px 0 0; color: #cdd9e6; }
 .elegir-op { display: grid; gap: 12px; width: min(420px, 100%); }
 .elegir .opcion { display: grid; gap: 4px; text-align: left; padding: 16px 18px; border: 1px solid #c9d2dc; border-radius: 12px; background: #fff; cursor: pointer; font: inherit; }
 .elegir .opcion b { font-size: 17px; color: #12355B; } .elegir .opcion span { color: #5b6b7a; font-size: 13px; }
