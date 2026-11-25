@@ -42,6 +42,7 @@
   const esDirectivo = () => st.acceso && (st.acceso.rol === 'administracion' || st.acceso.rol === 'gerencia');
   const puedeProgramar = () => st.acceso && st.acceso.rol === 'encargado';
   const localesVisibles = () => esDirectivo() ? LOCALES.slice() : [st.acceso.local];
+  const localSol = () => (st.acceso.rol === 'administracion' ? (st.locSol || LOCALES[0]) : st.acceso.local);
 
   async function leer(tabla, filtrar) {
     let q = st.sb.from(tabla).select('*');
@@ -139,10 +140,13 @@
 
   // ================================================================== solicitud
   function vistaSolicitud() {
-    if (!puedeProgramar()) return '<p class="vac-nota">Solo el encargado de cada local programa las vacaciones de su personal.</p>';
-    const pers = st.personal.filter((p) => p.local === st.acceso.local && p.tiene_derecho && p.activo !== false && (!st.acceso.turno || p.turno === st.acceso.turno));
+    const admin = st.acceso.rol === 'administracion';
+    if (!puedeProgramar() && !admin) return '<p class="vac-nota">Solo el encargado de cada local, o administración, programa las vacaciones.</p>';
+    const loc = localSol(), locs = localesVisibles();
+    const pers = st.personal.filter((p) => p.local === loc && p.tiene_derecho && p.activo !== false && (!st.acceso.turno || p.turno === st.acceso.turno));
     if (!pers.length) return '<p class="vac-nota">No hay personal con derecho a vacaciones en tu local.</p>';
-    return '<form id="vac-form" class="vac-form" novalidate>' +
+    const selLocAdmin = admin ? '<label class="campo"><span>Local</span><select id="f-loc">' + locs.map((l) => '<option' + (l === loc ? ' selected' : '') + '>' + l + '</option>').join('') + '</select></label>' : '';
+    return '<form id="vac-form" class="vac-form" novalidate>' + selLocAdmin +
       '<label class="campo"><span>Persona</span><select id="f-per">' + pers.map((p) => '<option value="' + p.id + '">' + esc(p.nombre) + ' · ' + esc(p.cargo) + '</option>').join('') + '</select></label>' +
       '<div id="f-pue-caja"></div>' +
       '<label class="campo"><span>Inicio (día hábil)</span><input id="f-ini" type="date" min="2026-12-01" max="2027-03-31"></label>' +
@@ -160,7 +164,7 @@
       caja.dataset.puesto = per.puesto;
     } else {
       caja.innerHTML = '<label class="campo"><span>Puesto (esta persona rota, elígelo)</span><select id="f-pue">' +
-        st.puestos.filter((p) => p.local === st.acceso.local && p.cargo === per.cargo).map((p) => '<option>' + esc(p.puesto) + '</option>').join('') + '</select></label>';
+        st.puestos.filter((p) => p.local === localSol() && p.cargo === per.cargo).map((p) => '<option>' + esc(p.puesto) + '</option>').join('') + '</select></label>';
       caja.dataset.puesto = '';
     }
   }
@@ -186,7 +190,7 @@
     if (dias === null) { err.textContent = 'Escribe una cantidad de días entre 1 y 30.'; return; }
     const puesto = puestoElegido();
     if (!puesto) { err.textContent = 'Elige el puesto.'; return; }
-    const r = await st.sb.from('vac_solicitudes').insert({ personal_id: per.id, local: st.acceso.local, puesto: puesto, inicio: ini, dias: dias, creado_por: st.uid });
+    const r = await st.sb.from('vac_solicitudes').insert({ personal_id: per.id, local: localSol(), puesto: puesto, inicio: ini, dias: dias, creado_por: st.uid });
     if (r.error) { err.textContent = r.error.message; return; }
     st.aviso = 'Solicitud enviada. Queda pendiente hasta que administración y gerencia la aprueben.';
     await cargar(); render();
@@ -324,11 +328,15 @@
   }
   function vistaReportes() {
     const r = st.rep, locs = localesRep();
+    if (r.vista === 'reemplazos' && !st.partime && !st.cargandoPartime) {
+      st.cargandoPartime = true;
+      leerPersonas().then((x) => { st.partime = Array.isArray(x) ? x : []; render(); }).catch(() => { st.partime = []; render(); });
+    }
     if (!r.local || locs.indexOf(r.local) < 0) r.local = locs[0];
     const [y, m] = MESES[r.mes];
     const selLoc = locs.length > 1 ? '<select id="rep-loc">' + locs.map((l) => '<option' + (l === r.local ? ' selected' : '') + '>' + l + '</option>').join('') + '</select>' : '<span class="vac-tag">' + esc(r.local) + '</span>';
     const selMes = '<select id="rep-mes">' + MESES.map((mm, i) => '<option value="' + i + '"' + (i === r.mes ? ' selected' : '') + '>' + mm[2] + '</option>').join('') + '</select>';
-    const selVista = '<select id="rep-vista">' + [['mensual', 'Mensual'], ['semanal', 'Semanal'], ['listado', 'Listado completo'], ['saldos', 'Saldos del personal']].map(([k, t]) => '<option value="' + k + '"' + (r.vista === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
+    const selVista = '<select id="rep-vista">' + [['mensual', 'Mensual'], ['semanal', 'Semanal'], ['listado', 'Listado completo'], ['reemplazos', 'Reemplazos por persona que sale'], ['saldos', 'Saldos del personal']].map(([k, t]) => '<option value="' + k + '"' + (r.vista === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
     const selEst = '<select id="rep-estado">' + [['aprobada', 'Solo aprobadas'], ['todas', 'Todas (pendientes incluidas)']].map(([k, t]) => '<option value="' + k + '"' + (r.estado === k ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>';
     const barra = '<div class="vac-barra vac-no-imprimir">' + selLoc + selMes + selVista + selEst +
       '<button type="button" class="btn" data-acc="rep-excel">Exportar a Excel</button><button type="button" class="btn" data-acc="rep-imprimir">Imprimir / PDF</button></div>';
@@ -355,6 +363,18 @@
           x.dias_acumulados != null ? String(Number(x.dias_acumulados).toFixed(1)) : '—',
           x.saldo_al ? f2(x.saldo_al) : '—']) };
     }
+    if (r.vista === 'reemplazos') {
+      const f3 = (d) => dDe(d).toLocaleDateString('es-CL');
+      const filas = sols.slice().sort((a, b) => a.inicio.localeCompare(b.inicio)).map((s2) => {
+        const rs = (st.reemplazos || []).filter((x) => x.solicitud_id === s2.id);
+        const grupos = {};
+        rs.forEach((x) => { const n = reemNombre(x); grupos[n] = (grupos[n] || 0) + 1; });
+        const txt = Object.keys(grupos).map((n) => n + ' (' + grupos[n] + (grupos[n] === 1 ? ' día' : ' días') + ')').join(', ') || '—';
+        const sin = Math.max(diasAsignables(s2).length - rs.length, 0);
+        return [nom(s2), f3(s2.inicio), f3(s2.fin), f3(s2.retorno), String(s2.dias), txt, String(sin)];
+      });
+      return { cabecera: ['Persona que sale', 'Inicio', 'Fin', 'Retorno', 'Días', 'Reemplazo asignado', 'Días sin reemplazo'], filas };
+    }
     const f = (d) => dDe(d).toLocaleDateString('es-CL');
     if (r.vista === 'listado') {
       return { cabecera: ['Persona', 'Inicio', 'Fin', 'Días', 'Retorno', 'Estado'],
@@ -373,6 +393,11 @@
         const rot = (d) => CORTO_DIA[d.getDay()] + ' ' + d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' });
         return [rot(a) + ' al ' + rot(b), quienes.join(', ') || '—', String(quienes.length)];
       }) };
+  }
+  function reemNombre(x) {
+    if (x.tipo === 'INTERNO') return (st.personal.find((p) => p.id === x.personal_id) || {}).nombre || 'Del local';
+    if (x.tipo === 'PARTTIME') return ((st.partime || []).find((p) => p.id === x.persona_id) || {}).nombre || 'Part-time';
+    return x.nombre || 'Contratado';
   }
   function hoyCorto() { return new Date().toLocaleDateString('es-CL'); }
   function cambiarReporte(el) {
@@ -788,6 +813,7 @@
           fila.dataset.prev = JSON.stringify(valores);
         });
         v.addEventListener('change', (ev) => {
+          if (ev.target.id === 'f-loc') { st.locSol = ev.target.value; render(); return; }
           if (ev.target.id === 'reem-bloque') {
             const s = st.sol.find((x) => x.id === st.reemAbierta);
             if (s) precargarRotativo(s, ev.target.value);
