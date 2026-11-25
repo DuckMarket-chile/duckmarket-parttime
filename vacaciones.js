@@ -59,6 +59,7 @@
     st.ruts = {};
     if (esDirectivo()) (await leer('vac_personal_rut')).forEach((x) => { st.ruts[x.personal_id] = x.rut; });
     st.reemplazos = await leer(esDirectivo() ? 'vac_reemplazos' : 'vac_reemplazos_vista');
+    st.semana = {};
     if (!st.local || localesVisibles().indexOf(st.local) < 0) st.local = localesVisibles()[0];
   }
 
@@ -397,7 +398,7 @@
     // las secciones se eligen desde el menú lateral: aquí solo se muestra la sección y sus avisos
     v.innerHTML = (st.aviso ? '<p class="vac-ok">' + esc(st.aviso) + '</p>' : '') + (st.error ? '<p class="vac-error">' + esc(st.error) + '</p>' : '') +
       '<section class="zona">' + contenido + '</section>';
-    v.querySelectorAll('.reem-fila[data-dia]').forEach((fila) => { mostrarCampos(fila); ajustarHasta(fila); });
+    v.querySelectorAll('.reem-fila[data-dia]').forEach((fila) => { mostrarCampos(fila); ajustarHasta(fila); actualizarSemana(fila); });
     st.aviso = ''; st.error = '';
     const f = $('#f-ini'); if (f) { f.addEventListener('input', previsualizar); $('#f-dias').addEventListener('input', previsualizar); previsualizar(); }
     const form = $('#vac-form'); if (form) form.addEventListener('submit', enviarSolicitud);
@@ -433,7 +434,9 @@
           mostrarCampos(origen); ajustarHasta(origen);
         } else if (acc === 'reem-resto') {
           const leer = (k) => { const x = origen.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
+          origen.dataset.modo = 'todos';
           aplicarPlantilla(form, origen, { tipo: leer('tipo'), persona: leer('persona'), nombre: leer('nombre'), rut: leer('rut'), desde: leer('desde'), hasta: leer('hasta') }, true);
+          form.querySelectorAll('.reem-fila[data-dia]').forEach((o) => actualizarSemana(o));
         }
         form.querySelectorAll('#reem-aviso').forEach((x) => x.remove());
         return;
@@ -532,27 +535,78 @@
       mostrarCampos(o); ajustarHasta(o);
     });
   }
-  function propagarPlantilla(fila) {
+  // Al elegir el tipo o la persona, la pantalla pregunta: ¿solo este día o todos los días? Si la fila ya dijo
+  // "todos los días", los datos del contratado (nombre, RUT, fechas) se copian solos a los demás días.
+  function propagarPlantilla(fila, eligePersona) {
     const form = fila.closest('#reem-form');
     if (!form) return;
+    if (!eligePersona && fila.dataset.modo !== 'todos') return;
     const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
     const plantilla = { tipo: leer(fila, 'tipo'), persona: leer(fila, 'persona'), nombre: leer(fila, 'nombre'), rut: leer(fila, 'rut'), desde: leer(fila, 'desde'), hasta: leer(fila, 'hasta') };
     if (!plantilla.tipo) return;
     form.querySelectorAll('#reem-aviso').forEach((x) => x.remove());
-    // solo cuenta como "otro reemplazo" un día que ya tiene OTRO dato escrito (otro tipo, otra persona, otro
-    // contratado). Un día al que solo le falta completar (p. ej. se copió el tipo y falta la persona) se
-    // completa sin preguntar: antes ese caso mostraba el aviso apenas se elegía la persona.
-    const distintas = [...form.querySelectorAll('.reem-fila[data-dia]')].filter((o) => o !== fila && !sinQuien(o) &&
-      (leer(o, 'tipo') !== plantilla.tipo || Object.keys(plantilla).some((k) => leer(o, k) && leer(o, k) !== plantilla[k]))).length;
-    if (!distintas) { aplicarPlantilla(form, fila, plantilla, false); return; }
+    if (fila.dataset.modo === 'todos') { aplicarPlantilla(form, fila, plantilla, true); form.querySelectorAll('.reem-fila[data-dia]').forEach((o) => actualizarSemana(o)); return; }
     const aviso = document.createElement('div');
     aviso.id = 'reem-aviso';
     aviso.setAttribute('style', 'margin:10px 0;padding:12px;border:1px solid #f0d28a;background:#fff8e6;border-radius:8px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:14px');
-    aviso.innerHTML = '<span>Ya hay ' + distintas + ' día(s) con otro reemplazo. ¿Qué hacemos?</span>' +
+    aviso.innerHTML = '<span>¿Este reemplazo es solo para este día o para todos los días de la vacación?</span>' +
       '<button type="button" class="btn chico" data-acc="reem-cancelar" data-dia="' + fila.dataset.dia + '">Cancelar</button>' +
-      '<button type="button" class="btn chico" data-acc="reem-este" data-dia="' + fila.dataset.dia + '">Reemplazar este día</button>' +
-      '<button type="button" class="btn ama chico" data-acc="reem-resto" data-dia="' + fila.dataset.dia + '">Reemplazar el resto</button>';
+      '<button type="button" class="btn chico" data-acc="reem-este" data-dia="' + fila.dataset.dia + '">Solo este día</button>' +
+      '<button type="button" class="btn ama chico" data-acc="reem-resto" data-dia="' + fila.dataset.dia + '">Todos los días</button>';
     form.insertBefore(aviso, form.firstChild);
+  }
+  // ---- horario de la semana de quien reemplaza, y choque con turnos o planificación en cualquier local
+  const cuerpoRut = (t) => { const s = String(t || '').replace(/[^0-9kK]/g, '').toUpperCase(); return s.slice(0, Math.max(s.length - 1, 0)); };
+  const minDe = (h) => { const [a, b] = String(h).slice(0, 5).split(':').map(Number); return a * 60 + b; };
+  const minSalida = (h) => (String(h).slice(0, 5) === '00:00' ? 1440 : minDe(h));
+  const cruzan = (e1, s1, e2, s2) => minDe(e1) < minSalida(s2) && minDe(e2) < minSalida(s1);
+  const lunesDe = (f) => iso(sumaD(dDe(f), -((dDe(f).getDay() + 6) % 7)));
+  // turnos y planificación de la semana: una consulta por semana (se guarda hasta recargar)
+  function semanaDatos(lun) {
+    st.semana = st.semana || {};
+    if (!st.semana[lun]) {
+      const dom = iso(sumaD(dDe(lun), 6));
+      st.semana[lun] = Promise.all([
+        st.sb.from('turnos').select('fecha,sucursal,entrada,salida,rut').gte('fecha', lun).lte('fecha', dom),
+        st.sb.from('plan').select('fecha,sucursal,entrada,salida,rut,estado').gte('fecha', lun).lte('fecha', dom).neq('estado', 'CANCELADO')
+      ]);
+    }
+    return st.semana[lun];
+  }
+  async function actualizarSemana(fila) {
+    if (!fila || !st.sb) return;
+    let caja = fila.querySelector('.reem-semana');
+    if (!caja) { caja = document.createElement('div'); caja.className = 'reem-semana'; caja.setAttribute('style', 'grid-column:1/-1;font-size:12px;color:#334155;line-height:1.5'); fila.appendChild(caja); }
+    const campo = (c) => { const x = fila.querySelector('[data-campo="' + c + '"]'); return x ? x.value : ''; };
+    const valor = campo('persona');
+    if (!campo('tipo') || campo('tipo') === 'CONTRATADO' || !valor) { caja.innerHTML = ''; return; }
+    const [pre, id] = valor.split(':');
+    let nombre = '', rut = '';
+    if (pre === 'I') { const p = st.personal.find((x) => x.id === Number(id)); nombre = p ? p.nombre : ''; rut = st.ruts[Number(id)] || ''; }
+    else { const p = (st.partime || []).find((x) => x.id === Number(id)); nombre = p ? p.nombre : ''; rut = p ? p.rut : ''; }
+    const cuerpo = cuerpoRut(rut);
+    if (!cuerpo) { caja.innerHTML = '<span style="color:#b91c1c">No tiene RUT registrado: no se puede revisar su horario.</span>'; return; }
+    const lun = lunesDe(fila.dataset.dia);
+    const [t, p] = await semanaDatos(lun);
+    if (t.error || p.error) { caja.innerHTML = '<span style="color:#b91c1c">No se pudo leer su horario: ' + esc((t.error || p.error).message) + '</span>'; return; }
+    const mios = [].concat(
+      (t.data || []).filter((x) => cuerpoRut(x.rut) === cuerpo).map((x) => ({ fecha: x.fecha, suc: x.sucursal, e: String(x.entrada).slice(0, 5), s: String(x.salida).slice(0, 5), de: 'turno' })),
+      (p.data || []).filter((x) => cuerpoRut(x.rut) === cuerpo).map((x) => ({ fecha: x.fecha, suc: x.sucursal, e: String(x.entrada).slice(0, 5), s: String(x.salida).slice(0, 5), de: 'planificación' })));
+    const f = fila.dataset.dia;
+    const e0 = campo('entrada'), s0 = campo('salida');
+    let html = '<div><b>Semana de ' + esc(nombre) + ':</b> ';
+    html += [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const d = iso(sumaD(dDe(lun), i));
+      const items = mios.filter((x) => x.fecha === d);
+      const txt = items.length ? items.map((x) => x.e + '–' + x.s + ' ' + esc(x.suc)).join(', ') : 'libre';
+      return '<span style="' + (d === f ? 'font-weight:700' : '') + '">' + DIAS_CORTO[dDe(d).getDay()] + ' ' + dDe(d).getDate() + ': ' + txt + '</span>';
+    }).join(' · ') + '</div>';
+    if (e0 && s0) {
+      mios.filter((x) => x.fecha === f && cruzan(e0, s0, x.e, x.s)).forEach((x) => {
+        html += '<div style="color:#b91c1c;font-weight:600">⚠ Ese día tiene ' + (x.de === 'turno' ? 'turno' : 'planificación') + ' en ' + esc(x.suc) + ' (' + x.e + '–' + x.s + ') que se cruza con este horario. La base no lo deja guardar.</div>';
+      });
+    }
+    caja.innerHTML = html;
   }
   // "hasta" no puede ser anterior a "desde"
   function ajustarHasta(fila) {
@@ -717,7 +771,14 @@
             const fila = ev.target.closest('.reem-fila[data-dia]');
             if (campo === 'tipo') mostrarCampos(fila);
             if (campo === 'desde') ajustarHasta(fila);
-            propagarPlantilla(fila);
+            if (campo === 'tipo' || campo === 'persona') fila.dataset.modo = '';
+            propagarPlantilla(fila, campo === 'tipo' || campo === 'persona');
+            actualizarSemana(fila);
+            return;
+          }
+          if (campo === 'entrada' || campo === 'salida') {
+            const fila = ev.target.closest('.reem-fila[data-dia]');
+            if (fila) actualizarSemana(fila);
             return;
           }
           if (ev.target.id && ev.target.id.indexOf('rep-') === 0) { cambiarReporte(ev.target); return; }
