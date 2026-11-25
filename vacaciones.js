@@ -397,7 +397,7 @@
     // las secciones se eligen desde el menú lateral: aquí solo se muestra la sección y sus avisos
     v.innerHTML = (st.aviso ? '<p class="vac-ok">' + esc(st.aviso) + '</p>' : '') + (st.error ? '<p class="vac-error">' + esc(st.error) + '</p>' : '') +
       '<section class="zona">' + contenido + '</section>';
-    v.querySelectorAll('[data-dia]').forEach((fila) => { mostrarCampos(fila); ajustarHasta(fila); });
+    v.querySelectorAll('.reem-fila[data-dia]').forEach((fila) => { mostrarCampos(fila); ajustarHasta(fila); });
     st.aviso = ''; st.error = '';
     const f = $('#f-ini'); if (f) { f.addEventListener('input', previsualizar); $('#f-dias').addEventListener('input', previsualizar); previsualizar(); }
     const form = $('#vac-form'); if (form) form.addEventListener('submit', enviarSolicitud);
@@ -425,7 +425,7 @@
       }
       if (acc === 'reem-cancelar' || acc === 'reem-este' || acc === 'reem-resto') {
         const form = $('#reem-form', st.v);
-        const origen = form.querySelector('[data-dia="' + b.dataset.dia + '"]');
+        const origen = form.querySelector('.reem-fila[data-dia="' + b.dataset.dia + '"]');
         if (acc === 'reem-cancelar') {
           // vuelve el día a como estaba antes del cambio
           const previo = JSON.parse(origen.dataset.prev || '{}');
@@ -474,10 +474,11 @@
   // ================================================================== reemplazos (solo administración)
   const DIAS_CORTO = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
   const TIPOS_REEM = { INTERNO: 'Interno (del local)', PARTTIME: 'Part-time (de la base)', CONTRATADO: 'Con contrato' };
-  // días del período en que se asigna reemplazo: lunes a sábado, sin feriados (el domingo no se trabaja)
+  // días en que se asigna reemplazo: desde el inicio hasta el día ANTES del retorno (si termina un viernes,
+  // el sábado siguiente también está libre), lunes a sábado, sin feriados (el domingo no se trabaja)
   function diasAsignables(s) {
     const out = [];
-    for (let d = dDe(s.inicio), h = dDe(s.fin); d <= h; d = sumaD(d, 1)) {
+    for (let d = dDe(s.inicio), h = dDe(s.retorno || iso(retorno(dDe(s.fin)))); d < h; d = sumaD(d, 1)) {
       if (d.getDay() !== 0 && !st.feriados.has(iso(d))) out.push(iso(d));
     }
     return out;
@@ -511,12 +512,17 @@
   }
   // lo que se elige en un día se copia a los demás días. Los vacíos se completan solos; si otros días ya tienen
   // otro reemplazo, un aviso dentro del formulario pregunta si también se cambian (Cambiar todos / Solo este día)
+  // un día "sin quién" todavía no tiene persona ni contratado elegido (puede tener solo el tipo, copiado de otro día)
+  function sinQuien(o) {
+    return ['persona', 'nombre', 'rut', 'desde', 'hasta'].every((k) => { const x = o.querySelector('[data-campo="' + k + '"]'); return !x || !x.value; });
+  }
   function aplicarPlantilla(form, fila, plantilla, sobrescribir) {
     const leer = (el, k) => { const x = el.querySelector('[data-campo="' + k + '"]'); return x ? x.value : ''; };
-    form.querySelectorAll('[data-dia]').forEach((o) => {
+    form.querySelectorAll('.reem-fila[data-dia]').forEach((o) => {
       if (o === fila) return;
       const tipoOtra = leer(o, 'tipo');
-      const reemplazar = sobrescribir && tipoOtra;
+      // también se reemplaza un día que solo tiene el tipo, sin persona: se cambió de idea antes de elegir a alguien
+      const reemplazar = (sobrescribir && tipoOtra) || (tipoOtra && tipoOtra !== plantilla.tipo && sinQuien(o));
       if (tipoOtra && tipoOtra !== plantilla.tipo && !reemplazar) return;
       Object.keys(plantilla).forEach((k) => {
         const x = o.querySelector('[data-campo="' + k + '"]');
@@ -533,8 +539,11 @@
     const plantilla = { tipo: leer(fila, 'tipo'), persona: leer(fila, 'persona'), nombre: leer(fila, 'nombre'), rut: leer(fila, 'rut'), desde: leer(fila, 'desde'), hasta: leer(fila, 'hasta') };
     if (!plantilla.tipo) return;
     form.querySelectorAll('#reem-aviso').forEach((x) => x.remove());
-    const distintas = [...form.querySelectorAll('[data-dia]')].filter((o) => o !== fila && leer(o, 'tipo') &&
-      Object.keys(plantilla).some((k) => leer(o, k) !== plantilla[k])).length;
+    // solo cuenta como "otro reemplazo" un día que ya tiene OTRO dato escrito (otro tipo, otra persona, otro
+    // contratado). Un día al que solo le falta completar (p. ej. se copió el tipo y falta la persona) se
+    // completa sin preguntar: antes ese caso mostraba el aviso apenas se elegía la persona.
+    const distintas = [...form.querySelectorAll('.reem-fila[data-dia]')].filter((o) => o !== fila && !sinQuien(o) &&
+      (leer(o, 'tipo') !== plantilla.tipo || Object.keys(plantilla).some((k) => leer(o, k) && leer(o, k) !== plantilla[k]))).length;
     if (!distintas) { aplicarPlantilla(form, fila, plantilla, false); return; }
     const aviso = document.createElement('div');
     aviso.id = 'reem-aviso';
@@ -599,7 +608,7 @@
   // lee las filas del formulario y las guarda: primero borra, luego cambia, luego agrega
   async function guardarReemplazos(s, box) {
     const cambios = [], faltan = [];
-    box.querySelectorAll('[data-dia]').forEach((fila) => {
+    box.querySelectorAll('.reem-fila[data-dia]').forEach((fila) => {
       const f = fila.dataset.dia, ex = reemDe(s.id, f);
       const c = (k) => { const el = fila.querySelector('[data-campo="' + k + '"]'); return el ? el.value.trim() : ''; };
       const tipo = c('tipo');
@@ -619,6 +628,8 @@
         row.rut = rutOk;
         if (row.contrato_hasta < row.contrato_desde) throw new Error('El contrato "hasta" no puede ser anterior a "desde" (día ' + f + ').');
       }
+      // un día que quedó igual no se vuelve a guardar
+      if (ex && Object.keys(row).every((k) => String(ex[k] == null ? '' : ex[k]) === String(row[k] == null ? '' : row[k]))) return;
       cambios.push({ f, op: ex ? 'update' : 'insert', id: ex ? ex.id : null, row });
     });
     if (faltan.length) throw new Error('Falta asignar reemplazo en ' + faltan.length + ' día(s): ' + faltan.join(', ') + '. Todas las jornadas de vacaciones deben tener reemplazo.');
@@ -685,7 +696,7 @@
         v.dataset.listo = '1';
         v.addEventListener('click', accion);
         v.addEventListener('focusin', (ev) => {
-          const fila = ev.target.closest && ev.target.closest('#reem-form [data-dia]');
+          const fila = ev.target.closest && ev.target.closest('#reem-form .reem-fila[data-dia]');
           if (!fila) return;
           const valores = {};
           ['tipo', 'persona', 'nombre', 'rut', 'desde', 'hasta', 'entrada', 'salida'].forEach((k) => {
@@ -703,7 +714,7 @@
             return;
           }
           if (['tipo', 'persona', 'nombre', 'rut', 'desde', 'hasta'].indexOf(campo) >= 0) {
-            const fila = ev.target.closest('[data-dia]');
+            const fila = ev.target.closest('.reem-fila[data-dia]');
             if (campo === 'tipo') mostrarCampos(fila);
             if (campo === 'desde') ajustarHasta(fila);
             propagarPlantilla(fila);
