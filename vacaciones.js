@@ -476,6 +476,16 @@
     const form = $('#vac-form'); if (form) form.addEventListener('submit', enviarSolicitud);
     if (form) { $('#f-per').addEventListener('change', pintarPuesto); pintarPuesto(); }
       }
+  // imprime desde una ventana aparte con solo el contenido (la impresión de la app completa sale en blanco)
+  function imprimirAparte(titulo, html) {
+    const w = window.open('', '_blank');
+    if (!w) { st.error = 'El navegador bloqueó la ventana de impresión: permite ventanas emergentes para este sitio y vuelve a intentar.'; render(); return; }
+    w.document.open();
+    w.document.write('<!doctype html><html lang="es"><head><meta charset="utf-8"><base href="' + esc(location.href) + '"><title>' + esc(titulo) + '</title>' +
+      '<link rel="stylesheet" href="estilos.css"><link rel="stylesheet" href="vacaciones.css"></head><body style="background:#fff;padding:16px">' + html + '</body></html>');
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 400);
+  }
   async function accion(ev) {
     const b = ev.target.closest('[data-acc]'); if (!b) return;
     const acc = b.dataset.acc;
@@ -519,8 +529,17 @@
         st.aviso = n ? 'Reemplazos guardados (' + n + ' cambio' + (n === 1 ? '' : 's') + ').' : 'No había cambios que guardar.';
         render(); return;
       }
-      if (acc === 'comp-imprimir') { window.print(); return; }
-      if (acc === 'rep-imprimir') { window.print(); return; }
+      if (acc === 'comp-imprimir') { imprimirAparte('Comprobante de vacaciones', comprobanteHtml(st.comp)); return; }
+      if (acc === 'rep-imprimir') {
+        const r = st.rep, d = datosReporte();
+        const titulo = 'Vacaciones · ' + r.local + ' · ' + MESES[r.mes][2];
+        const tabla = d.filas.length
+          ? '<table class="vac-tabla"><thead><tr>' + d.cabecera.map((c) => '<th>' + esc(c) + '</th>').join('') + '</tr></thead><tbody>' +
+            d.filas.map((f) => '<tr>' + f.map((c) => '<td>' + esc(c) + '</td>').join('') + '</tr>').join('') + '</tbody></table>'
+          : '<p>No hay datos para este reporte.</p>';
+        imprimirAparte(titulo, '<h3>' + esc(titulo) + '</h3>' + tabla);
+        return;
+      }
       if (acc === 'aprobar') {
         const campo = b.dataset.campo, id = Number(b.dataset.id);
         const r = await st.sb.from('vac_solicitudes').update({ [campo]: true }).eq('id', id);
@@ -747,10 +766,30 @@
     return '<div id="reem-form" style="margin-top:12px"><p class="vac-nota">Hay que asignar reemplazo a <b>todas</b> las jornadas (' + dias.length + ' días). ' + (rotativo ? 'El horario por defecto sale del bloque de mañana o tarde que elijas arriba; cámbialo si corresponde.' : 'El horario por defecto es el último turno de ' + esc(nombrePersona(s.personal_id)) + ' para ese día de la semana; cámbialo si corresponde.') + '</p>' + selBloque +
       filas + '<div style="margin-top:12px"><button type="button" class="btn ama" data-acc="reem-guardar">Guardar reemplazos</button></div></div>';
   }
+  // listado de solo lectura para encargados y gerencia: cada día con quién reemplaza y el horario
+  function vistaReemplazosLectura(aprob) {
+    if (!st.partime && !st.cargandoPartime) {
+      st.cargandoPartime = true;
+      leerPersonas().then((x) => { st.partime = Array.isArray(x) ? x : []; render(); }).catch(() => { st.partime = []; render(); });
+    }
+    return '<p class="vac-nota">Solo lectura: los reemplazos los asigna administración.</p><ul class="vac-lista">' + aprob.map((s) => {
+      const dias = diasAsignables(s), hechos = dias.filter((f) => reemDe(s.id, f)).length;
+      const filasDia = dias.map((f) => {
+        const x = reemDe(s.id, f), d = dDe(f);
+        return '<tr><td>' + DIAS_CORTO[d.getDay()] + ' ' + d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' }) + '</td><td>' +
+          (x ? esc(reemNombre(x)) : '<span class="vac-nota">sin asignar</span>') + '</td><td>' +
+          (x ? horaCorta(x.entrada) + '–' + horaCorta(x.salida) : '—') + '</td></tr>';
+      }).join('');
+      return '<li><b>' + esc(nombrePersona(s.personal_id)) + '</b> · ' + esc(s.local) + '<br>' +
+        '<span class="vac-nota">' + dDe(s.inicio).toLocaleDateString('es-CL') + ' al ' + dDe(s.fin).toLocaleDateString('es-CL') + ' · reemplazos: ' + hechos + ' de ' + dias.length + ' días</span>' +
+        '<div class="vac-cal"><table class="vac-tabla"><thead><tr><th>Día</th><th>Reemplazo</th><th>Horario</th></tr></thead><tbody>' + filasDia + '</tbody></table></div></li>';
+    }).join('') + '</ul>';
+  }
   function vistaReemplazos() {
-    if (!st.acceso || st.acceso.rol !== 'administracion') return '<p class="vac-nota">Solo administración asigna reemplazos.</p>';
+    const admin = !!st.acceso && st.acceso.rol === 'administracion';
     const aprob = st.sol.filter((s) => s.estado === 'aprobada').sort((a, b) => a.inicio.localeCompare(b.inicio));
     if (!aprob.length) return '<p class="vac-nota">Aún no hay solicitudes aprobadas.</p>';
+    if (!admin) return vistaReemplazosLectura(aprob);
     return '<ul class="vac-lista">' + aprob.map((s) => {
       const dias = diasAsignables(s), hechos = dias.filter((f) => reemDe(s.id, f)).length;
       const abierta = st.reemAbierta === s.id;

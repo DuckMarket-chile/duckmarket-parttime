@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.25.10';
+  const VERSION = '2026.11.25.11';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -170,7 +170,7 @@
     { id: 'vac-general', txt: 'Vista general', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-solicitud', txt: 'Nueva solicitud', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-aprobacion', txt: 'Aprobaciones', ve: () => !!S.vacAcceso && VACDIR() },
-    { id: 'vac-reemplazos', txt: 'Reemplazos', ve: () => !!S.vacAcceso && S.vacAcceso.rol === 'administracion' },
+    { id: 'vac-reemplazos', txt: 'Reemplazos', ve: () => !!S.vacAcceso },
     { id: 'vac-reportes', txt: 'Reportes', ve: () => !!S.vacAcceso && !!S.vacPublicado },
     { id: 'vac-comprobantes', txt: 'Comprobantes', ve: () => !!S.vacAcceso && VACDIR() }
   ];
