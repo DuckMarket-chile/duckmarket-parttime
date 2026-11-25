@@ -99,7 +99,7 @@
         if (f.desde) q = q.gte('cuando', f.desde); return q.limit(f.limite || 2000); }),
       perfiles: () => todo(() => sb.from('perfiles').select('*').order('usuario')),
       async crearUsuario(u) {
-        const r = await sb.functions.invoke('hyper-action', { body: u });
+        const r = await sb.functions.invoke('crear-usuario', { body: u });
         if (r.error) { let m = r.error.message || 'No se pudo crear el usuario'; try { const j = await r.error.context.json(); m = j.error || m; } catch (e) {} throw new Error(m); }
         if (!r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'No se pudo crear el usuario');
         return r.data;
