@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.3';
+  const VERSION = '2026.11.26.4';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -843,11 +843,26 @@
       DB.plan({ desde: sigD, hasta: sigH }).catch(() => []) ]);
     const gasto = (lista, s) => lista.filter((t) => !s || t.sucursal === s).reduce((a, t) => a + Number(t.total), 0);
     // part-time del mes: turnos y pagos, de mayor a menor
-    const pers = new Map();
-    tAct.forEach((t) => { const k = L.normNombre(t.nombre); const x = pers.get(k) || { nombre: t.nombre, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); pers.set(k, x); });
-    const ranking = [...pers.values()].sort((a, b) => (b.turnos - a.turnos) || (b.total - a.total)).slice(0, 30);
+    // panaderos: sus pagos van aparte (igual que en Reportes)
+    const armarPers = (lista) => { const m = new Map(); lista.forEach((t) => { const k = L.normNombre(t.nombre); const x = m.get(k) || { nombre: t.nombre, turnos: 0, horas: 0, total: 0, sucs: new Set() }; x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total); x.sucs.add(t.sucursal); m.set(k, x); }); return [...m.values()].sort((a, b) => (b.turnos - a.turnos) || (b.total - a.total)); };
+    const ranking = armarPers(tAct.filter((t) => t.funcion !== 'PANADERIA')).slice(0, 30);
+    const rankingPan = armarPers(tAct.filter((t) => t.funcion === 'PANADERIA'));
+    const filaRank = (x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Pagos del mes">' + pesoV(x.total) + '</td></tr>';
+    const tablaRank = (lista) => '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' + lista.map(filaRank).join('') + '</tbody></table></div>';
+    const panPanaderia = rankingPan.length ? '<section class="caja" style="margin-top:14px"><h2>Panadería · pagos aparte</h2>' + tablaRank(rankingPan) + '</section>' : '';
+
+    // gráficos: gasto por local (este mes contra el anterior) y gasto de los últimos 6 meses
+    const meses6 = [];
+    const iniSeis = (() => { let y = ay, m = am - 5; while (m <= 0) { m += 12; y--; } return y + '-' + pad2(m) + '-01'; })();
+    const seis = await DB.turnos({ desde: iniSeis, hasta: h }).catch(() => []);
+    for (let i = 5; i >= 0; i--) { let y = ay, m = am - i; while (m <= 0) { m += 12; y--; } const k = y + '-' + pad2(m); meses6.push([k, L.MESES[m - 1].slice(0, 3), seis.filter((t) => t.fecha.slice(0, 7) === k).reduce((a, t) => a + Number(t.total), 0)]); }
+    const maxM = Math.max(1, ...meses6.map((m) => m[2]));
+    const columnas = '<div class="columnas">' + meses6.map((m) => '<div class="col"><b>' + pesoV(m[2]) + '</b><i style="height:' + (m[2] / maxM * 70).toFixed(1) + '%' + (m[0] === mes ? ';opacity:.6' : '') + '"></i><span>' + m[1] + (m[0] === mes ? ' (hasta hoy)' : '') + '</span></div>').join('') + '</div>';
+
     const sumAct = gasto(tAct), sumPrev = gasto(tPrev), sumPlan = planes.filter((p) => p.estado !== 'CANCELADO').reduce((a, p) => a + Number(p.total), 0);
     const filas = visibles().map((s) => { const a = gasto(tAct, s), b = gasto(tPrev, s); return { s, a, b, sem: semaforo(a, b) }; });
+    const maxL = Math.max(1, ...filas.map((x) => Math.max(x.a, x.b)));
+    const barrasLocal = '<div class="barras">' + filas.map((x) => '<div class="barra-fila"><span class="fuerte">' + esc(x.s) + '</span><div><div class="barra"><i style="width:' + (x.b / maxL * 100).toFixed(1) + '%;background:#9FB3CA"></i></div><div class="barra" style="margin-top:4px"><i style="width:' + (x.a / maxL * 100).toFixed(1) + '%"></i></div></div><span class="num">' + pesoV(x.a) + '</span></div>').join('') + '</div><p class="nota" style="margin-top:8px">Gris: mes anterior · Azul: este mes</p>';
     const rojos = filas.filter((x) => x.sem.cls === 'mal').length;
     v.innerHTML = cabecera('Tablero', 'Indicadores del mes: gasto por local comparado con el mismo período del mes anterior.') +
       '<section class="tarjetas">' +
@@ -861,10 +876,12 @@
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
       filasSemaforo(filas) +
       '</tbody></table></div></section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Gasto de los últimos 6 meses</h2>' + columnas + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Part-time del mes: turnos y pagos</h2>' +
       (ranking.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' +
       ranking.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Pagos del mes">' + pesoV(x.total) + '</td></tr>').join('') +
-      '</tbody></table></div>' : '<p class="nota" style="margin:0">No hay turnos registrados este mes.</p>') + '</section>';
+      '</tbody></table></div>' : '<p class="nota" style="margin:0">No hay turnos registrados este mes.</p>') + '</section>' + panPanaderia;
   }
 
   // revisión para la administración: registros que conviene mirar (último año)
