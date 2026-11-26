@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.19';
+  const VERSION = '2026.11.26.20';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -605,7 +605,12 @@
     const [turnos, abonos, personas] = await Promise.all([DB.turnos({ desde: q.desde, hasta: q.hasta }), DB.abonos(), DB.personas().catch(() => [])]);
     const filas = L.resumenQuincena(turnos, abonos, q).filter((f) => f.total > 0 || f.pagado > 0); // solo quienes tienen pagos en la quincena
     const vis = filas.filter((f) => (!S.pagoSuc || S.pagoSuc === 'TODAS' || String(f.sucursales).includes(S.pagoSuc)) && (filtro.estado === 'Todos' || (filtro.estado === 'Con saldo' ? f.saldo > 0.5 : f.estado === filtro.estado)) && (!filtro.texto || L.normNombre(f.nombre).includes(L.normNombre(filtro.texto))));
-    const tot = filas.reduce((s, f) => s + f.total, 0), pag = filas.reduce((s, f) => s + f.pagado, 0), conSaldo = filas.filter((f) => f.saldo > 0.5);
+    // con filtro de sucursal, las tarjetas muestran solo lo de ese local (el pagado se reparte según su peso en el total de cada persona)
+    const suc = (S.pagoSuc && S.pagoSuc !== 'TODAS') ? S.pagoSuc : null;
+    const sucTot = (f) => f.turnos.filter((t) => t.sucursal === suc).reduce((s, t) => s + Number(t.total), 0);
+    const porSuc = suc ? filas.filter((f) => sucTot(f) > 0).map((f) => { const tS = sucTot(f), pS = f.total ? f.pagado * tS / f.total : 0; return { total: tS, pagado: pS, saldo: tS - pS, pagada: tS - pS <= 0.5 }; }) : null;
+    const base = suc ? porSuc : filas;
+    const tot = base.reduce((s, f) => s + f.total, 0), pag = base.reduce((s, f) => s + f.pagado, 0), conSaldo = suc ? porSuc.filter((f) => f.saldo > 0.5) : filas.filter((f) => f.saldo > 0.5);
     // saldos de quincenas cerradas hace más de 15 días
     const limite = L.sumarDias(hoy(), -15);
     const todosT = await DB.turnos({ desde: '2024-11-01', hasta: hoy() }).catch(() => []);
@@ -639,7 +644,7 @@
 
     v.innerHTML = cabecera('Pagos quincenales', 'Cada persona suma lo trabajado en todas las sucursales. Un pago bloquea los cambios de esos turnos para los encargados.',
       '<label class="campo">Quincena<select id="g-q">' + opciones(qs.map((x) => [x.clave, L.quincenaTxt(x)]), S.quincena) + '</select></label><button class="btn" data-acc="revisar">Revisar antes de pagar</button>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
-      alertaHtml + '<section class="tarjetas">' + tarjeta('Total quincena', L.peso(tot), filas.length + ' personas · ' + turnos.length + ' turnos') + tarjeta('Pagado', '<span style="color:#1F7A4A">' + L.peso(pag) + '</span>', filas.filter((f) => f.estado === 'PAGADO').length + ' pagadas · ' + filas.filter((f) => f.estado === 'PARCIAL').length + ' con abono') +
+      alertaHtml + '<section class="tarjetas">' + tarjeta(suc ? 'Total ' + suc : 'Total quincena', L.peso(tot), (suc ? porSuc.length : filas.length) + ' personas · ' + (suc ? turnos.filter((t) => t.sucursal === suc).length : turnos.length) + ' turnos' + (suc ? ' en ' + suc : '')) + tarjeta('Pagado', '<span style="color:#1F7A4A">' + L.peso(pag) + '</span>', base.filter((f) => suc ? f.pagada : f.estado === 'PAGADO').length + ' pagadas · ' + filas.filter((f) => f.estado === 'PARCIAL').length + ' con abono') +
       tarjeta('Saldo por pagar', L.peso(tot - pag), conSaldo.length + ' personas con saldo', true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><div class="caja-tit"><h2>Personas de la quincena</h2><label class="campo"><span class="sr">Sucursal</span><select id="g-suc">' + opciones([['TODAS', 'Todas las sucursales'], ['ANDES', 'ANDES'], ['ENCINAS', 'ENCINAS'], ['SAN MARTIN', 'SAN MARTIN']], S.pagoSuc || 'TODAS') + '</select></label>' + '<label class="campo"><span class="sr">Estado</span><select id="g-est">' + opciones(['Todos', 'Con saldo', 'PENDIENTE', 'PARCIAL', 'PAGADO', 'PAGADO DE MÁS'], filtro.estado) + '</select></label>' +
       '<label class="campo"><span class="sr">Buscar persona</span><input type="search" id="g-txt" placeholder="Buscar persona" value="' + esc(filtro.texto) + '"></label></div>' +
