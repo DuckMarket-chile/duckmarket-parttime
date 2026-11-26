@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.7';
+  const VERSION = '2026.11.26.8';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -56,6 +56,7 @@
     personas: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0113 0"></path><path d="M16 4.5a3.5 3.5 0 010 7M18 14a6 6 0 013.5 6"></path>',
     reportes: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>',
     historial: '<circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path>',
+    calidad: '<path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9"></path>',
     usuarios: '<rect x="4" y="11" width="16" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 018 0v4"></path>',
     buscar: '<circle cx="11" cy="11" r="7"></circle><path d="M21 21l-4.3-4.3"></path>',
     respaldo: '<path d="M12 3v12M7 10l5 5 5-5M4 21h16"></path>', 'vac-publicar': '<path d="M12 19V5M5 12l7-7 7 7"></path>', 'vac-resumen': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-calendario': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-general': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-solicitud': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-aprobacion': '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M8 2v4M16 2v4"></path>', 'vac-reportes': '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>', 'vac-reemplazos': '<path d="M7 16V4M3 8l4-4 4 4M17 8v12M13 16l4 4 4-4"></path>', 'vac-comprobantes': '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"></path><path d="M14 2v6h6"></path>'
@@ -177,6 +178,7 @@
     { id: 'personas', txt: 'Personas', ve: () => tiene('Personas') },
     { id: 'reportes', txt: 'Reportes', ve: () => tiene('VerResumen') || tiene('ReportesPlan') },
     { id: 'historial', txt: 'Historial de cambios', ve: () => tiene('Historial') },
+    { id: 'calidad', txt: 'Calidad de datos', ve: () => !!S.perfil.admin },
     { id: 'usuarios', txt: 'Usuarios y permisos', ve: () => S.perfil.admin || tiene('Usuarios') },
     { id: 'respaldo', txt: 'Respaldo de datos', ve: () => !!S.perfil.admin },
     { grupo: 'VACACIONES' },
@@ -1098,8 +1100,50 @@
     if (!filtro.nombre) f.nombre.focus();
   }
 
+  // ================================================================== CALIDAD DE DATOS (solo administración)
+  const distancia = (a, b) => { const m = a.length, n = b.length; const d = Array.from({ length: m + 1 }, (_, i) => [i]); for (let j = 1; j <= n; j++) d[0][j] = j; for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return d[m][n]; };
+  const parecidos = (a, b) => { const x = L.normNombre(a), y = L.normNombre(b); return x !== y && 1 - distancia(x, y) / Math.max(x.length, y.length) >= 0.8; };
+  async function vistaCalidad(v) {
+    if (!S.perfil.admin) { v.innerHTML = cabecera('Calidad de datos', '') + '<p class="nota">Solo la administración ve esta pantalla.</p>'; return; }
+    const [personas, turnos] = await Promise.all([DB.personas(), DB.turnos({ desde: '2026-01-01', hasta: hoy() })]);
+    const activos = personas.filter((p) => p.activo !== false);
+    const sinRut = activos.filter((p) => !String(p.rut || '').trim());
+    const pares = [];
+    activos.forEach((a, i) => activos.slice(i + 1).forEach((b) => { if (parecidos(a.nombre, b.nombre)) pares.push([a.nombre, b.nombre]); }));
+    const ceros = turnos.filter((t) => Number(t.pago) === 0);
+    const sinFun = {};
+    turnos.filter((t) => !t.funcion).forEach((t) => { const k = L.normNombre(t.nombre); const x = sinFun[k] || (sinFun[k] = { nombre: t.nombre, turnos: [] }); x.turnos.push(t); });
+    const grupos = Object.values(sinFun).sort((a, b) => b.turnos.length - a.turnos.length);
+    const lista = (items, f) => items.length ? '<ul style="margin:6px 0 0;padding-left:18px">' + items.map(f).join('') + '</ul>' : '<p class="nota" style="margin:6px 0 0">Nada que revisar.</p>';
+    v.innerHTML = cabecera('Calidad de datos', 'Revisa lo que conviene corregir: personas sin RUT, nombres parecidos, pagos en cero y turnos sin función.') +
+      '<section class="caja" style="margin-top:14px"><h2>Personas sin RUT (' + sinRut.length + ')</h2>' +
+      lista(sinRut, (p) => '<li>' + esc(p.nombre) + '</li>') + '</section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Nombres parecidos (' + pares.length + ')</h2><p class="nota" style="margin:0">Revísalos: pueden ser la misma persona escrita distinto.</p>' +
+      lista(pares.slice(0, 60), (x) => '<li>' + esc(x[0]) + ' · ' + esc(x[1]) + '</li>') + '</section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Turnos con pago en cero desde 2026 (' + ceros.length + ')</h2>' +
+      lista(ceros.slice(0, 60), (t) => '<li>' + L.fechaTxt(t.fecha) + ' · ' + esc(t.sucursal) + ' · ' + esc(t.nombre) + '</li>') + '</section>' +
+      '<section class="caja" style="margin-top:14px"><h2>Turnos sin función desde 2026</h2><p class="nota" style="margin:0 0 8px">Elige la función de cada persona y se aplica a todos sus turnos que no la tienen.</p>' +
+      (grupos.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th class="num">Turnos sin función</th><th>Función</th><th><span class="sr">Acción</span></th></tr></thead><tbody>' +
+        grupos.slice(0, 80).map((g, i) => '<tr><td class="fuerte" data-t="Persona">' + esc(g.nombre) + '</td><td class="num" data-t="Turnos">' + g.turnos.length + '</td><td data-t="Función"><select data-fun="' + i + '"><option value="">Elegir…</option>' + L.FUNCIONES.map((f) => '<option value="' + f[0] + '">' + esc(f[1]) + '</option>').join('') + '</select></td><td data-t="Acción"><button class="btn chico" data-acc="aplicar-fun" data-i="' + i + '">Aplicar</button></td></tr>').join('') +
+        '</tbody></table></div>' : '<p class="nota" style="margin:0">Todos los turnos desde 2026 tienen función.</p>') + '</section>';
+    v.onclick = async (ev) => {
+      const b = ev.target.closest('[data-acc=aplicar-fun]'); if (!b) return;
+      const g = grupos[Number(b.dataset.i)];
+      const sel = v.querySelector('select[data-fun="' + b.dataset.i + '"]');
+      const fun = sel ? sel.value : '';
+      if (!fun) return mensaje('Elige primero la función de ' + g.nombre + '.', true);
+      const nombreFun = (L.FUNCIONES.find((f) => f[0] === fun) || [])[1];
+      if (!(await confirmar('Asignar función', 'Asignar ' + nombreFun + ' a ' + g.turnos.length + ' turno(s) de ' + g.nombre + ' que no tienen función?', 'Asignar'))) return;
+      try {
+        for (const t of g.turnos) await DB.guardarTurno(Object.assign({}, t, { funcion: fun }));
+        mensaje('Función asignada a ' + g.turnos.length + ' turno(s) de ' + g.nombre + '.');
+        vistaCalidad(v);
+      } catch (e) { falla(e); }
+    };
+  }
+
   const VISTAS = { tablero: (v) => vistaTablero(v), registro: (v) => vistaRegistro(v), planificador: vistaPlanificador, dias: vistaDias, pagos: (v) => vistaPagos(v), conciliacion: vistaConciliacion,
-    personas: (v) => vistaPersonas(v, '', null), reportes: (v) => vistaReportes(v), historial: (v) => vistaHistorial(v, ''), usuarios: (v) => vistaUsuarios(v),
+    personas: (v) => vistaPersonas(v, '', null), reportes: (v) => vistaReportes(v), historial: (v) => vistaHistorial(v, ''), usuarios: (v) => vistaUsuarios(v), calidad: (v) => vistaCalidad(v),
     buscar: (v) => vistaBuscar(v),
     'vac-resumen': (v) => window.VAC.vista(v, 'resumen'), 'vac-calendario': (v) => window.VAC.vista(v, 'local'),
     'vac-general': (v) => window.VAC.vista(v, 'general'), 'vac-solicitud': (v) => window.VAC.vista(v, 'solicitud'),
