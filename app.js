@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.1';
+  const VERSION = '2026.11.26.2';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -28,6 +28,22 @@
   };
   // filas de la tabla "Gasto por local" (lista de { s, a, b, sem })
   const filasSemaforo = (lista) => lista.map((x) => '<tr><td class="fuerte" data-t="Local">' + esc(x.s) + '</td><td class="num" data-t="Mes anterior">' + pesoV(x.b) + '</td><td class="num" data-t="Este mes">' + pesoV(x.a) + '</td><td class="num" data-t="Variación">' + pctFlecha(x.sem.pct) + '</td><td data-t="Semáforo"><span class="' + x.sem.cls + '">● ' + x.sem.txt + '</span></td></tr>').join('');
+  // choque de horario de una persona en CUALQUIER local (espeja la regla de la base, SQL 09)
+  const minH = (h) => { const [a, b] = String(h).slice(0, 5).split(':').map(Number); return a * 60 + b; };
+  const finH = (e, s) => { const sm = minH(s); return sm === 0 ? 1440 : sm <= minH(e) ? sm + 1440 : sm; };
+  const cruzaH = (e1, s1, e2, s2) => minH(e1) < finH(e2, s2) && minH(e2) < finH(e1, s1);
+  const cuerpoRut = (r) => { const s = L.normRut(r || ''); return s.length > 1 ? s.slice(0, -1) : ''; };
+  const mismaPersona = (x, nombre, rut) => (cuerpoRut(x.rut) && cuerpoRut(x.rut) === cuerpoRut(rut)) || L.normNombre(x.nombre) === L.normNombre(nombre);
+  // opts: { turno: id del turno que se edita, sucursal: local del turno (sus planificaciones del mismo local no cuentan) }
+  async function choqueHorario(fecha, nombre, rut, entrada, salida, opts) {
+    opts = opts || {};
+    const [tt, pp] = await Promise.all([DB.turnos({ desde: fecha, hasta: fecha }), DB.plan({ desde: fecha, hasta: fecha })]);
+    const t = tt.find((x) => x.id !== opts.turno && mismaPersona(x, nombre, rut) && cruzaH(entrada, salida, x.entrada, x.salida));
+    if (t) return nombre + ' ya tiene asignado un turno en ' + t.sucursal + ' (' + t.entrada + '–' + t.salida + ') en ese rango horario.';
+    const p = pp.find((x) => x.estado === 'PLANIFICADO' && (!opts.sucursal || x.sucursal !== opts.sucursal) && mismaPersona(x, nombre, rut) && cruzaH(entrada, salida, x.entrada, x.salida));
+    if (p) return nombre + ' ya está planificado en ' + p.sucursal + ' (' + p.entrada + '–' + p.salida + ') en ese rango horario.';
+    return null;
+  }
   const pctFlecha = (p) => p == null ? '—' : (p > 0.5 ? '<span class="mal">▲</span>' : p < -0.5 ? '<span class="ok">▼</span>' : '<span class="gris">►</span>') + ' ' + (p > 0 ? '+' : '') + p.toFixed(1) + '%';
   const hoy = () => L.hoyChile();
   const ICO = {
@@ -368,6 +384,8 @@
       if (bloq) return mensaje('No se registran turnos el ' + L.fechaLarga(t.fecha) + ': ' + bloq.nombre + ' (feriado irrenunciable).', true);
       if (L.calcHoras(t.entrada, t.salida, t.colacion) === 0) return mensaje('Revisa el horario: el turno queda en 0 horas.', true);
       if (!t.pago && !(await confirmar('Pago en cero', 'El pago del turno está en $0. ¿Guardar igual?'))) return;
+      const choque = await choqueHorario(t.fecha, t.nombre, t.rut, t.entrada, t.salida, { turno: t.id, sucursal: t.sucursal });
+      if (choque) return mensaje(choque, true);
       const repetido = turnos.find((x) => x.id !== t.id && L.normNombre(x.nombre) === L.normNombre(t.nombre) && x.sucursal === t.sucursal);
       if (repetido && !(await confirmar('Ya tiene un turno', t.nombre + ' ya tiene un turno este día en ' + t.sucursal + ' (' + repetido.entrada + '–' + repetido.salida + '). ¿Agregar otro?'))) return;
       const btn = form.querySelector('[type=submit]'); btn.disabled = true;
@@ -486,6 +504,8 @@
       f.addEventListener('submit', async (ev) => {
         ev.preventDefault();
         const per = nombreOficial(f.nombre.value);
+        const choqueP = await choqueHorario(dia.fecha, per.nombre, per.rut, f.entrada.value, f.salida.value, {});
+        if (choqueP) return mensaje(choqueP, true);
         if (delDia.some((p) => p.estado !== 'CANCELADO' && L.normNombre(p.nombre) === L.normNombre(per.nombre)) && !(await confirmar('Ya está asignada', per.nombre + ' ya está asignada este día. ¿Asignarla otra vez?'))) return;
         try {
           await DB.guardarPlan({ fecha: dia.fecha, sucursal: suc, nombre: per.nombre, rut: per.rut, funcion: f.funcion.value, entrada: f.entrada.value, salida: f.salida.value, pago: L.num(f.pago.value), locomocion: L.num(f.locomocion.value), obs: f.obs.value.trim() });
