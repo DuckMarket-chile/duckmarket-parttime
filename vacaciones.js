@@ -309,7 +309,7 @@
         fila('Período que se descuenta (anualidad)', p.periodo_inicio ? f(p.periodo_inicio) + ' al ' + f(p.periodo_fin) : '') +
         fila('Fechas de las vacaciones', f(s2.inicio) + ' al ' + f(s2.fin)) +
         fila('Días hábiles tomados', s2.dias) +
-        fila('Sábados y domingos dentro del período', finDeSemanaEn(s2.inicio, s2.fin)) +
+        fila('Sábados y domingos desde el inicio hasta el retorno', finDeSemanaEn(s2.inicio, s2.retorno)) +
         fila('Retorno al trabajo', f(s2.retorno)) +
         fila('Saldo de días antes de esta solicitud', saldoAntes != null ? saldoAntes.toFixed(1) : '') +
         fila('Saldo de días después', saldoDespues) +
