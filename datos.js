@@ -72,6 +72,7 @@
           p_fecha_pago: a.fecha_pago, p_obs: a.obs || '', p_comprobante: a.comprobante || '' }));
       },
       async anularAbono(id) { ok(await sb.rpc('anular_abono', { p_id: id })); },
+      async pagosLocal(quincena, sucursal) { return ok(await sb.rpc('pagos_de_mi_local', { p_quincena: quincena, p_sucursal: sucursal })); },
       async marcarComprobante(id, comp) { ok(await sb.from('abonos').update({ comprobante: comp }).eq('id', id)); },
 
       dias: (f) => todo(() => { let q = sb.from('dias').select('*').order('fecha'); if (f && f.desde) q = q.gte('fecha', f.desde); if (f && f.hasta) q = q.lte('fecha', f.hasta); return q; }),
@@ -127,7 +128,7 @@
     const perfilesDemo = [
       { id: 'u1', usuario: 'admin', nombre: 'Administrador', sucursal: null, rol: 'admin', admin: true, permisos: [], activo: true },
       { id: 'u5', usuario: 'gerente', nombre: 'Gerente', sucursal: null, rol: 'gerente', admin: false, permisos: rolesDemo[0].permisos.concat(['RegistrarPago', 'AnularPago', 'Conciliar', 'EditarPersonas']), activo: true },
-      { id: 'u2', usuario: 'andes', nombre: 'Encargado Andes', sucursal: 'ANDES', rol: 'sucursal', admin: false, permisos: suc0.concat(['Historial']), activo: true },
+      { id: 'u2', usuario: 'andes', nombre: 'Encargado Andes', sucursal: 'ANDES', rol: 'sucursal', admin: false, permisos: suc0.concat(['Historial', 'VerPagosLocal']), activo: true },
       { id: 'u3', usuario: 'encinas', nombre: 'Encargado Encinas', sucursal: 'ENCINAS', rol: 'sucursal', admin: false, permisos: suc0.slice(), activo: true },
       { id: 'u4', usuario: 'sanmartin', nombre: 'Encargado San Martín', sucursal: 'SAN MARTIN', rol: 'sucursal', admin: false, permisos: suc0.filter((k) => k !== 'Planificar'), activo: true }
     ];
@@ -230,6 +231,19 @@
           obs: a.obs || '', estado: 'VIGENTE', total_quincena: tot, pagado_antes: pag, saldo_despues: tot - pag - a.monto, registrado_el: new Date().toISOString(),
           usuario: perfil.usuario, anulado_el: null, anulado_por: '', comprobante: a.comprobante || '' };
         abonos.push(nuevo); anotar('PAGO', 'abonos', nuevo); return espera(nuevo.id);
+      },
+      async pagosLocal(quincena, sucursal) {
+        const qDe = (f) => String(f).slice(0, 7) + (Number(String(f).slice(8, 10)) <= 15 ? '-Q1' : '-Q2');
+        const grupos = new Map();
+        turnos.filter((t) => t.sucursal === sucursal && qDe(t.fecha) === quincena).forEach((t) => {
+          const k = L.normNombre(t.nombre), x = grupos.get(k) || { nombre: t.nombre, turnos: 0, monto_local: 0 };
+          x.turnos++; x.monto_local += Number(t.total); grupos.set(k, x);
+        });
+        return [...grupos.entries()].map(([k, x]) => {
+          const total = turnos.filter((t) => qDe(t.fecha) === quincena && L.normNombre(t.nombre) === k).reduce((a, t) => a + Number(t.total), 0);
+          const pagado = abonos.filter((a) => a.estado === 'VIGENTE' && a.quincena === quincena && L.normNombre(a.nombre) === k).reduce((a, r) => a + r.monto, 0);
+          return { nombre: x.nombre, turnos: x.turnos, monto_local: x.monto_local, estado: pagado >= total - 0.5 ? 'PAGADO' : 'PENDIENTE' };
+        }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
       },
       async anularAbono(id) {
         exigir(permiso('AnularPago')); const a = abonos.find((x) => x.id === id && x.estado === 'VIGENTE'); exigir(a, 'El pago no existe o ya está anulado.');

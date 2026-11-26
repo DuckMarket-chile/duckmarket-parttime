@@ -20,7 +20,7 @@
       ['PlanificarOtras', 'Planificar y confirmar asistencia en otras sucursales (de las que puede ver)'],
       ['DiasPlan', 'Definir días a planificar y dotación requerida'], ['ReportesPlan', 'Ver reportes de planificación']]],
     ['Pagos', [
-      ['Pagos', 'Ver pagos quincenales (requiere ver todas las sucursales)'], ['RegistrarPago', 'Registrar pagos'],
+      ['Pagos', 'Ver pagos quincenales (requiere ver todas las sucursales)'], ['VerPagosLocal', 'Ver estado y monto de pago de los part-time de su sucursal (solo lectura)'], ['RegistrarPago', 'Registrar pagos'],
       ['AnularPago', 'Anular pagos'], ['Conciliar', 'Conciliar con el estado de cuenta de Mercado Pago']]],
     ['Base de part-time', [
       ['Personas', 'Ver la base de part-time (datos personales y bancarios)'], ['EditarPersonas', 'Agregar, modificar y desactivar personas']]],

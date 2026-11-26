@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.18';
+  const VERSION = '2026.11.26.19';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -52,6 +52,7 @@
     planificador: '<path d="M9 11l3 3 8-8"></path><path d="M20 12v7a2 2 0 01-2 2H6a2 2 0 01-2-2V5a2 2 0 012-2h9"></path>',
     dias: '<rect x="3" y="4" width="18" height="17" rx="2"></rect><path d="M3 10h18M12 13v5M9.5 15.5h5"></path>',
     pagos: '<rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path>',
+    pagoslocal: '<rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path>',
     conciliacion: '<path d="M7 7h11l-3-3M17 17H6l3 3"></path>',
     personas: '<circle cx="9" cy="8" r="3.5"></circle><path d="M2.5 20a6.5 6.5 0 0113 0"></path><path d="M16 4.5a3.5 3.5 0 010 7M18 14a6 6 0 013.5 6"></path>',
     reportes: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"></path>',
@@ -172,6 +173,7 @@
     { id: 'planificador', txt: 'Planificador', ve: () => tiene('Planificar') || tiene('DiasPlan') || tiene('ReportesPlan') },
     { id: 'buscar', txt: 'Buscar persona', ve: () => true },
     { id: 'pagos', txt: 'Pagos quincenales', ve: () => tiene('Pagos') },
+    { id: 'pagoslocal', txt: 'Pagos de mi local', ve: () => tiene('VerPagosLocal') && !tiene('Pagos') },
     { id: 'conciliacion', txt: 'Conciliar Mercado Pago', ve: () => tiene('Conciliar') },
     { grupo: 'ADMINISTRACIÓN' },
     { id: 'dias', txt: 'Días a planificar', ve: () => tiene('DiasPlan') },
@@ -1378,7 +1380,29 @@
     };
   }
 
-  const VISTAS = { tablero: (v) => vistaTablero(v), registro: (v) => vistaRegistro(v), planificador: vistaPlanificador, dias: vistaDias, pagos: (v) => vistaPagos(v), conciliacion: vistaConciliacion,
+  // ================================================================== PAGOS DE MI LOCAL (solo lectura)
+  async function vistaPagosLocal(v) {
+    const quincenas = L.ultimasQuincenas(12);
+    const q = quincenas.find((x) => x.clave === S.pagoLocalQ) || quincenas[0];
+    const sucs = visibles();
+    const suc = (S.pagoLocalSuc && sucs.indexOf(S.pagoLocalSuc) >= 0) ? S.pagoLocalSuc : sucs[0];
+    S.pagoLocalQ = q.clave; S.pagoLocalSuc = suc;
+    const filas = suc ? await DB.pagosLocal(q.clave, suc).catch((e) => { falla(e); return []; }) : [];
+    const pend = filas.filter((x) => x.estado === 'PENDIENTE').length;
+    const totalL = filas.reduce((a, x) => a + Number(x.monto_local), 0);
+    const selQ = '<label class="campo"><span class="sr">Quincena</span><select id="pl-q">' + quincenas.map((x) => '<option value="' + x.clave + '"' + (x.clave === q.clave ? ' selected' : '') + '>' + esc(L.quincenaTxt(x)) + '</option>').join('') + '</select></label>';
+    const selS = sucs.length > 1 ? '<label class="campo"><span class="sr">Sucursal</span><select id="pl-s">' + opciones(sucs, suc) + '</select></label>' : '';
+    v.innerHTML = cabecera('Pagos de mi local', 'Solo lectura: estado y monto de los part-time de su sucursal en la quincena. No muestra pagos de otros locales.') +
+      '<section class="zona"><div class="caja"><div class="botones">' + selQ + selS + '</div>' +
+      '<div class="tarjetas">' + tarjeta('Part-time', String(filas.length), suc || '') + tarjeta('Monto del local', pesoV(totalL), 'turnos de esta quincena') + tarjeta('Pendientes', String(pend), pend ? 'sin pago completo' : 'todos pagados') + '</div>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th class="num">Turnos</th><th class="num">Monto del local</th><th>Estado</th></tr></thead><tbody>' +
+      filas.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Monto del local">' + pesoV(x.monto_local) + '</td><td data-t="Estado">' + (x.estado === 'PAGADO' ? est('Pagado', 'ok') : est('Pendiente', 'aviso')) + '</td></tr>').join('') +
+      '</tbody></table>' + (filas.length ? '' : '<div class="vacio">No hay turnos de esta sucursal en la quincena.</div>') + '</div></div></section>';
+    $('#pl-q', v).onchange = (e) => { S.pagoLocalQ = e.target.value; vistaPagosLocal(v); };
+    if ($('#pl-s', v)) $('#pl-s', v).onchange = (e) => { S.pagoLocalSuc = e.target.value; vistaPagosLocal(v); };
+  }
+
+  const VISTAS = { tablero: (v) => vistaTablero(v), registro: (v) => vistaRegistro(v), planificador: vistaPlanificador, dias: vistaDias, pagos: (v) => vistaPagos(v), pagoslocal: (v) => vistaPagosLocal(v), conciliacion: vistaConciliacion,
     personas: (v) => vistaPersonas(v, '', null), reportes: (v) => vistaReportes(v), historial: (v) => vistaHistorial(v, ''), usuarios: (v) => vistaUsuarios(v), calidad: (v) => vistaCalidad(v),
     buscar: (v) => vistaBuscar(v),
     'vac-resumen': (v) => window.VAC.vista(v, 'resumen'), 'vac-calendario': (v) => window.VAC.vista(v, 'local'),
