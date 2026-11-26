@@ -72,6 +72,8 @@
           p_fecha_pago: a.fecha_pago, p_obs: a.obs || '', p_comprobante: a.comprobante || '' }));
       },
       async anularAbono(id) { ok(await sb.rpc('anular_abono', { p_id: id })); },
+      async emitirComprobantePartime(id) { return ok(await sb.rpc('emitir_comprobante_partime', { p_abono: id })); },
+      async comprobantesPartime() { return todo(() => sb.from('comprobantes_partime').select('*')); },
       async pagosLocal(quincena, sucursal) { return ok(await sb.rpc('pagos_de_mi_local', { p_quincena: quincena, p_sucursal: sucursal })); },
       async marcarComprobante(id, comp) { ok(await sb.from('abonos').update({ comprobante: comp }).eq('id', id)); },
 
@@ -136,7 +138,7 @@
       'Ignacio Paredes Silva', 'Javiera Núñez Toro', 'Tomás Fuentes Reyes', 'Andrea Molina Vera'];
     const personas = nombres.map((n, i) => ({ id: i + 1, nombre: n, rut: '', telefono: '9 ' + (61234560 + i), direccion: '', correo: '', banco: i % 2 ? 'BancoEstado' : 'Banco de Chile',
       tipo_cuenta: i % 2 ? 'Cuenta RUT' : 'Cuenta Corriente', cuenta: String(10000000 + i * 137), activo: true, variantes: i === 2 ? 'VALENTINA SOTO P' : '', obs: '', actualizado: '', usuario: '' }));
-    let turnos = [], abonos = [], plan = [], dias = [], historial = [], sig = { t: 1, a: 1, p: 1, h: 1 }, presup = [];
+    let turnos = [], abonos = [], plan = [], dias = [], historial = [], sig = { t: 1, a: 1, p: 1, h: 1 }, presup = [], compsPT = [];
     let perfil = null;
     const suc = ['ANDES', 'ENCINAS', 'SAN MARTIN'];
     const q = L.quincenaDe(hoy), qAnt = L.quincenaDe(L.sumarDias(q.desde, -1));
@@ -245,6 +247,8 @@
           return { nombre: x.nombre, turnos: x.turnos, monto_local: x.monto_local, estado: pagado >= total - 0.5 ? 'PAGADO' : 'PENDIENTE' };
         }).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
       },
+      async emitirComprobantePartime(id) { const ex = compsPT.find((c) => c.abono_id === id); if (ex) return espera(ex.numero); const n = compsPT.length + 1; compsPT.push({ numero: n, abono_id: id }); return espera(n); },
+      async comprobantesPartime() { return espera(compsPT.slice()); },
       async anularAbono(id) {
         exigir(permiso('AnularPago')); const a = abonos.find((x) => x.id === id && x.estado === 'VIGENTE'); exigir(a, 'El pago no existe o ya está anulado.');
         const antes = copia(a); Object.assign(a, { estado: 'ANULADO', anulado_el: new Date().toISOString(), anulado_por: perfil.usuario }); anotar('PAGO ANULADO', 'abonos', a, antes);

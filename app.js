@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.21';
+  const VERSION = '2026.11.26.22';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -580,14 +580,15 @@
     try { await navigator.clipboard.writeText(texto); mensaje('Datos copiados. Pégalos en la transferencia.'); }
     catch (e) { window.prompt('Copia estos datos:', texto); }
   }
+  const ptNum = (n) => 'PT-' + String(n).padStart(6, '0');
   // comprobante de pago en PDF (descarga directa; jsPDF desde cdnjs)
-  function descargarComprobantePdf(a, sel, per, q) {
+  function descargarComprobantePdf(a, sel, per, q, numero) {
     if (!window.jspdf) return mensaje('No se pudo cargar el generador de PDF. Revisa la conexión e intenta de nuevo.', true);
     const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
     const x = 20; let y = 25;
     const fila = (k, v) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(k, x, y); doc.setFont('helvetica', 'normal'); doc.text(String(v), x + 62, y); y += 8; };
     doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(18, 53, 91); doc.text('Duck Market - Comprobante de pago', x, y); y += 7;
-    doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal'); doc.text('Part-Time - N° ' + a.id, x, y); y += 4;
+    doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal'); doc.text('Part-Time - ' + (numero ? ptNum(numero) : 'pago N° ' + a.id), x, y); y += 4;
     doc.setDrawColor(18, 53, 91); doc.setLineWidth(0.8); doc.line(x, y, 190, y); y += 10;
     fila('Persona', sel.nombre);
     fila('RUT', (per && per.rut) || '-');
@@ -604,7 +605,7 @@
     doc.setLineWidth(0.3); doc.setDrawColor(120, 120, 120);
     doc.line(x, y, x + 70, y); doc.line(120, y, 190, y); y += 5;
     doc.setFontSize(9); doc.text('Recibí conforme: ' + sel.nombre, x, y); doc.text('Autorizado por', 120, y);
-    doc.save('Pago_' + a.id + '_' + sel.nombre.replace(/\s+/g, '_') + '.pdf');
+    doc.save((numero ? 'Comprobante_' + ptNum(numero) : 'Pago_' + a.id) + '_' + sel.nombre.replace(/\s+/g, '_') + '.pdf');
   }
   function abrirComprobante(a, sel, per, q) {
     const f = (d) => d ? L.fechaTxt(d) : '—';
@@ -629,6 +630,8 @@
     if (!S.quincena) S.quincena = qs[0].clave;
     const q = L.quincenaDeClave(S.quincena);
     const [turnos, abonos, personas] = await Promise.all([DB.turnos({ desde: q.desde, hasta: q.hasta }), DB.abonos(), DB.personas().catch(() => [])]);
+    const cps = await DB.comprobantesPartime().catch(() => []);
+    const numPT = new Map(cps.map((c) => [Number(c.abono_id), Number(c.numero)]));
     const filas = L.resumenQuincena(turnos, abonos, q).filter((f) => f.total > 0 || f.pagado > 0); // solo quienes tienen pagos en la quincena
     const vis = filas.filter((f) => (!S.pagoSuc || S.pagoSuc === 'TODAS' || String(f.sucursales).includes(S.pagoSuc)) && (filtro.estado === 'Todos' || (filtro.estado === 'Con saldo' ? f.saldo > 0.5 : f.estado === filtro.estado)) && (!filtro.texto || L.normNombre(f.nombre).includes(L.normNombre(filtro.texto))));
     // con filtro de sucursal, las tarjetas muestran solo lo de ese local (el pagado se reparte según su peso en el total de cada persona)
@@ -677,14 +680,14 @@
       (vis.length ? tablaPagos(visResto) + (visPan.length ? '<p class="nota" style="margin:12px 0 6px;font-weight:700">Panadería · pagos aparte</p>' + tablaPagos(visPan) : '') : '<div class="vacio">No hay personas con ese filtro en esta quincena.</div>') + '</div>' + pagoVariosHtml +
       (sel ? '<div class="caja" id="detalle"><div><h2>' + esc(sel.nombre) + '</h2><p class="nota">' + esc(L.quincenaTxt(q)) + (per && per.banco ? ' · ' + esc(per.banco) + ' ' + esc(per.tipo_cuenta) + ' ' + esc(per.cuenta) + (per.rut ? ' · RUT ' + esc(per.rut) : '') : '') + '</p><button type="button" class="btn chico" data-acc="copiar">Copiar datos para transferir</button></div>' +
         '<div>' + sel.turnos.map((t) => '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--linea)"><span class="gris" style="width:48px">' + L.fechaTxt(t.fecha).slice(0, 5) + '</span><span style="flex:1;font-weight:600">' + esc(t.sucursal) + '</span><span>' + L.peso(t.total) + '</span></div>').join('') + '</div>' +
-        (sel.abonos.length ? '<div><b class="nota">Pagos</b>' + sel.abonos.map((a) => '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--linea)' + (a.estado === 'ANULADO' ? ';text-decoration:line-through;color:var(--gris)' : '') + '"><span style="flex:1">N°' + a.id + ' · ' + L.fechaTxt(a.fecha_pago) + (a.comprobante ? ' · MP ' + esc(a.comprobante) : '') + '<div class="nota">' + esc(a.obs) + '</div></span><b>' + L.peso(a.monto) + '</b>' +
-          (a.estado === 'VIGENTE' ? '<button class="btn chico" data-acc="comp" data-id="' + a.id + '">Comprobante</button><button class="btn chico" data-acc="pdf" data-id="' + a.id + '">Descargar PDF</button>' : '') + (a.estado === 'VIGENTE' && tiene('AnularPago') ? '<button class="btn chico peligro" data-acc="anular" data-id="' + a.id + '">Anular</button>' : '') + '</div>').join('') + '</div>' : '') +
+        (sel.abonos.length ? '<div><b class="nota">Pagos</b>' + sel.abonos.map((a) => '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--linea)' + (a.estado === 'ANULADO' ? ';text-decoration:line-through;color:var(--gris)' : '') + '"><span style="flex:1">N°' + a.id + (numPT.has(a.id) ? ' · ' + ptNum(numPT.get(a.id)) : '') + ' · ' + L.fechaTxt(a.fecha_pago) + (a.comprobante ? ' · MP ' + esc(a.comprobante) : '') + '<div class="nota">' + esc(a.obs) + '</div></span><b>' + L.peso(a.monto) + '</b>' +
+          (a.estado === 'VIGENTE' ? '<button class="btn chico" data-acc="comp" data-id="' + a.id + '">Comprobante</button>' + (numPT.has(a.id) ? '<button class="btn chico" data-acc="pdf" data-id="' + a.id + '">Descargar PDF</button>' : (tiene('Pagos') ? '<button class="btn chico" data-acc="emitir" data-id="' + a.id + '">Emitir comprobante</button>' : '')) : '') + (a.estado === 'VIGENTE' && tiene('AnularPago') ? '<button class="btn chico peligro" data-acc="anular" data-id="' + a.id + '">Anular</button>' : '') + '</div>').join('') + '</div>' : '') +
         (() => { const hist = abonos.filter((a) => L.normNombre(a.nombre) === L.normNombre(sel.nombre)).sort((a, b) => String(b.quincena).localeCompare(String(a.quincena))).slice(0, 8);
           return hist.length ? '<div style="margin-bottom:10px"><b class="nota">Historial de pagos</b>' + hist.map((a) => '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--linea)"><span style="flex:1">' + esc(a.quincena) + ' · ' + (a.fecha_pago ? L.fechaTxt(a.fecha_pago) : 'sin fecha') + '</span><b>' + L.peso(a.monto) + '</b>' + (a.estado === 'ANULADO' ? '<span class="nota">anulado</span>' : '') + '</div>').join('') + '</div>' : ''; })() +
         '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center"><div class="ayuda"><div>Total</div><b>' + L.peso(sel.total) + '</b></div><div class="ayuda"><div>Pagado</div><b>' + L.peso(sel.pagado) + '</b></div><div class="ayuda" style="background:var(--azul);color:#fff"><div>Saldo</div><b>' + L.peso(sel.saldo) + '</b></div></div>' +
         (sel.saldo > 0.5 && tiene('RegistrarPago') ? '<form id="f-pago" style="display:flex;flex-direction:column;gap:10px"><div class="campos2"><label class="campo">Monto a pagar<input name="monto" inputmode="numeric" required value="' + Math.round(sel.saldo) + '"></label><label class="campo">Fecha de pago<input type="date" name="fecha" required value="' + hoy() + '"></label></div>' +
           '<label class="campo">Medio / observación<input name="obs" value="Transferencia"></label><label class="campo">N° transacción / comprobante<input name="comp" placeholder="Opcional (ej. ID de Mercado Pago)"></label>' +
-          '<button class="btn ama" type="submit">Registrar pago</button><p class="nota">Si pagas menos que el saldo queda como abono y el resto sigue pendiente.</p></form>' : '<div class="ayuda">' + (sel.saldo < -0.5 ? 'Se pagó ' + L.peso(-sel.saldo) + ' de más: revisa los pagos.' : sel.saldo > 0.5 ? 'Saldo pendiente de ' + L.peso(sel.saldo) + '.' : 'Quincena pagada completa.') + '</div>') + '</div>' : '') + '</section>';
+          '<label class="campo" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="emitir"> Emitir comprobante con número al registrar el pago</label><button class="btn ama" type="submit">Registrar pago</button><p class="nota">Si pagas menos que el saldo queda como abono y el resto sigue pendiente.</p></form>' : '<div class="ayuda">' + (sel.saldo < -0.5 ? 'Se pagó ' + L.peso(-sel.saldo) + ' de más: revisa los pagos.' : sel.saldo > 0.5 ? 'Saldo pendiente de ' + L.peso(sel.saldo) + '.' : 'Quincena pagada completa.') + '</div>') + '</div>' : '') + '</section>';
 
     $('#g-q', v).onchange = (e) => { S.quincena = e.target.value; S.pagoSel = null; vistaPagos(v, filtro); };
     $('#g-suc', v).onchange = (e) => { S.pagoSuc = e.target.value; vistaPagos(v, filtro); };
@@ -720,7 +723,8 @@
       }
       if (b.dataset.acc === 'copiar') { await copiarTransferencia(sel, per, q); return; }
       if (b.dataset.acc === 'comp') { const a = sel.abonos.find((x) => String(x.id) === b.dataset.id); if (a) abrirComprobante(a, sel, per, q); return; }
-      if (b.dataset.acc === 'pdf') { const a = sel.abonos.find((x) => String(x.id) === b.dataset.id); if (a) descargarComprobantePdf(a, sel, per, q); return; }
+      if (b.dataset.acc === 'pdf') { const a = sel.abonos.find((x) => String(x.id) === b.dataset.id); if (a) descargarComprobantePdf(a, sel, per, q, numPT.get(a.id)); return; }
+      if (b.dataset.acc === 'emitir') { try { const n = await DB.emitirComprobantePartime(Number(b.dataset.id)); mensaje('Comprobante ' + ptNum(n) + ' emitido.'); await vistaPagos(v, filtro); } catch (e) { falla(e); } return; }
       if (b.dataset.acc === 'anular') {
         const a = sel.abonos.find((x) => String(x.id) === b.dataset.id);
         if (!(await confirmar('Anular pago', '¿Anular el pago N°' + a.id + ' de ' + a.nombre + ' por ' + L.peso(a.monto) + '?\nEl saldo de la quincena vuelve a quedar pendiente.', 'Anular', true))) return;
@@ -742,7 +746,8 @@
       if (monto > sel.saldo + 0.5 && !(await confirmar('Monto mayor que el saldo', 'Vas a pagar ' + L.peso(monto) + ' y el saldo es ' + L.peso(sel.saldo) + '. ¿Registrar igual?'))) return;
       try {
         const id = await DB.registrarAbono({ nombre: sel.nombre, rut: sel.rut || (per && per.rut) || '', quincena: q.clave, monto, fecha_pago: fp.fecha.value, obs: fp.obs.value.trim(), comprobante: fp.comp.value.trim() });
-        mensaje('Pago N°' + id + ' registrado: ' + sel.nombre + ' ' + L.peso(monto) + '.'); vistaPagos(v, filtro);
+        let txtCp = ''; if (fp.emitir.checked) { const n = await DB.emitirComprobantePartime(Number(id)); txtCp = ' Comprobante ' + ptNum(n) + ' emitido.'; }
+        mensaje('Pago N°' + id + ' registrado: ' + sel.nombre + ' ' + L.peso(monto) + '.' + txtCp); vistaPagos(v, filtro);
       } catch (e) { falla(e); }
     });
   }
