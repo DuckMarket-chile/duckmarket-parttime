@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.9';
+  const VERSION = '2026.11.26.10';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -604,6 +604,29 @@
     const filas = L.resumenQuincena(turnos, abonos, q).filter((f) => f.total > 0 || f.pagado > 0); // solo quienes tienen pagos en la quincena
     const vis = filas.filter((f) => (!S.pagoSuc || S.pagoSuc === 'TODAS' || String(f.sucursales).includes(S.pagoSuc)) && (filtro.estado === 'Todos' || (filtro.estado === 'Con saldo' ? f.saldo > 0.5 : f.estado === filtro.estado)) && (!filtro.texto || L.normNombre(f.nombre).includes(L.normNombre(filtro.texto))));
     const tot = filas.reduce((s, f) => s + f.total, 0), pag = filas.reduce((s, f) => s + f.pagado, 0), conSaldo = filas.filter((f) => f.saldo > 0.5);
+    // saldos de quincenas cerradas hace más de 15 días
+    const limite = L.sumarDias(hoy(), -15);
+    const todosT = await DB.turnos({ desde: '2024-11-01', hasta: hoy() }).catch(() => []);
+    const viejos = [];
+    L.ultimasQuincenas(24).forEach((x) => {
+      const q2 = L.quincenaDeClave(x.clave);
+      if (q2.hasta >= limite) return;
+      const tq = todosT.filter((t) => t.fecha >= q2.desde && t.fecha <= q2.hasta);
+      L.resumenQuincena(tq, abonos, q2).filter((f) => f.saldo > 0.5).forEach((f) => viejos.push({ nombre: f.nombre, clave: q2.clave, saldo: f.saldo }));
+    });
+    const porPersonaV = {};
+    viejos.forEach((x) => { const k = L.normNombre(x.nombre); const g = porPersonaV[k] || (porPersonaV[k] = { nombre: x.nombre, total: 0, quincenas: [] }); g.total += x.saldo; g.quincenas.push(x.clave); });
+    const gruposV = Object.values(porPersonaV).sort((a, b) => b.total - a.total);
+    const alertaHtml = gruposV.length ? '<section class="caja" style="margin-bottom:14px;border-color:#B42318"><h2 class="mal">Saldos de más de 15 días (' + gruposV.length + ' persona' + (gruposV.length === 1 ? '' : 's') + ')</h2>' +
+      '<p class="nota" style="margin:0 0 6px">Quincenas ya cerradas con saldo pendiente. Revísalos antes de pagar la quincena actual.</p>' +
+      gruposV.slice(0, 20).map((g) => '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--linea)"><span style="flex:1" class="fuerte">' + esc(g.nombre) + '</span><span class="nota">' + esc(g.quincenas.slice(0, 3).join(', ')) + (g.quincenas.length > 3 ? '…' : '') + '</span><b>' + L.peso(g.total) + '</b></div>').join('') + '</section>' : '';
+
+    // pago a varias personas a la vez (saldo completo de cada una)
+    const pendientesV = vis.filter((f) => f.saldo > 0.5);
+    const pagoVariosHtml = (pendientesV.length && tiene('RegistrarPago')) ? '<div class="caja" style="margin-top:14px"><h2>Pagar a varias personas</h2><p class="nota" style="margin:0 0 6px">Marca a quienes vas a pagar su saldo completo de esta quincena.</p>' +
+      '<div style="max-height:260px;overflow:auto">' + pendientesV.map((f) => '<label style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--linea)"><input type="checkbox" data-pv="' + esc(f.nombre) + '"><span style="flex:1">' + esc(f.nombre) + '</span><b>' + L.peso(f.saldo) + '</b></label>').join('') + '</div>' +
+      '<button type="button" class="btn ama" data-acc="pagar-varios" style="margin-top:10px">Registrar pagos marcados</button></div>' : '';
+
     let sel = filas.find((f) => f.nombre === S.pagoSel) || vis[0];
     const per = sel ? L.buscarPersona(personas, sel.nombre, sel.rut) : null;
     // panaderos: sus pagos se muestran aparte (si alguno de sus turnos de la quincena es de Panadería)
@@ -614,15 +637,17 @@
 
     v.innerHTML = cabecera('Pagos quincenales', 'Cada persona suma lo trabajado en todas las sucursales. Un pago bloquea los cambios de esos turnos para los encargados.',
       '<label class="campo">Quincena<select id="g-q">' + opciones(qs.map((x) => [x.clave, L.quincenaTxt(x)]), S.quincena) + '</select></label><button class="btn" data-acc="revisar">Revisar antes de pagar</button>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
-      '<section class="tarjetas">' + tarjeta('Total quincena', L.peso(tot), filas.length + ' personas · ' + turnos.length + ' turnos') + tarjeta('Pagado', '<span style="color:#1F7A4A">' + L.peso(pag) + '</span>', filas.filter((f) => f.estado === 'PAGADO').length + ' pagadas · ' + filas.filter((f) => f.estado === 'PARCIAL').length + ' con abono') +
+      alertaHtml + '<section class="tarjetas">' + tarjeta('Total quincena', L.peso(tot), filas.length + ' personas · ' + turnos.length + ' turnos') + tarjeta('Pagado', '<span style="color:#1F7A4A">' + L.peso(pag) + '</span>', filas.filter((f) => f.estado === 'PAGADO').length + ' pagadas · ' + filas.filter((f) => f.estado === 'PARCIAL').length + ' con abono') +
       tarjeta('Saldo por pagar', L.peso(tot - pag), conSaldo.length + ' personas con saldo', true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><div class="caja-tit"><h2>Personas de la quincena</h2><label class="campo"><span class="sr">Sucursal</span><select id="g-suc">' + opciones([['TODAS', 'Todas las sucursales'], ['ANDES', 'ANDES'], ['ENCINAS', 'ENCINAS'], ['SAN MARTIN', 'SAN MARTIN']], S.pagoSuc || 'TODAS') + '</select></label>' + '<label class="campo"><span class="sr">Estado</span><select id="g-est">' + opciones(['Todos', 'Con saldo', 'PENDIENTE', 'PARCIAL', 'PAGADO', 'PAGADO DE MÁS'], filtro.estado) + '</select></label>' +
       '<label class="campo"><span class="sr">Buscar persona</span><input type="search" id="g-txt" placeholder="Buscar persona" value="' + esc(filtro.texto) + '"></label></div>' +
-      (vis.length ? tablaPagos(visResto) + (visPan.length ? '<p class="nota" style="margin:12px 0 6px;font-weight:700">Panadería · pagos aparte</p>' + tablaPagos(visPan) : '') : '<div class="vacio">No hay personas con ese filtro en esta quincena.</div>') + '</div>' +
+      (vis.length ? tablaPagos(visResto) + (visPan.length ? '<p class="nota" style="margin:12px 0 6px;font-weight:700">Panadería · pagos aparte</p>' + tablaPagos(visPan) : '') : '<div class="vacio">No hay personas con ese filtro en esta quincena.</div>') + '</div>' + pagoVariosHtml +
       (sel ? '<div class="caja" id="detalle"><div><h2>' + esc(sel.nombre) + '</h2><p class="nota">' + esc(L.quincenaTxt(q)) + (per && per.banco ? ' · ' + esc(per.banco) + ' ' + esc(per.tipo_cuenta) + ' ' + esc(per.cuenta) + (per.rut ? ' · RUT ' + esc(per.rut) : '') : '') + '</p><button type="button" class="btn chico" data-acc="copiar">Copiar datos para transferir</button></div>' +
         '<div>' + sel.turnos.map((t) => '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--linea)"><span class="gris" style="width:48px">' + L.fechaTxt(t.fecha).slice(0, 5) + '</span><span style="flex:1;font-weight:600">' + esc(t.sucursal) + '</span><span>' + L.peso(t.total) + '</span></div>').join('') + '</div>' +
         (sel.abonos.length ? '<div><b class="nota">Pagos</b>' + sel.abonos.map((a) => '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--linea)' + (a.estado === 'ANULADO' ? ';text-decoration:line-through;color:var(--gris)' : '') + '"><span style="flex:1">N°' + a.id + ' · ' + L.fechaTxt(a.fecha_pago) + (a.comprobante ? ' · MP ' + esc(a.comprobante) : '') + '<div class="nota">' + esc(a.obs) + '</div></span><b>' + L.peso(a.monto) + '</b>' +
           (a.estado === 'VIGENTE' ? '<button class="btn chico" data-acc="comp" data-id="' + a.id + '">Comprobante</button>' : '') + (a.estado === 'VIGENTE' && tiene('AnularPago') ? '<button class="btn chico peligro" data-acc="anular" data-id="' + a.id + '">Anular</button>' : '') + '</div>').join('') + '</div>' : '') +
+        (() => { const hist = abonos.filter((a) => L.normNombre(a.nombre) === L.normNombre(sel.nombre)).sort((a, b) => String(b.quincena).localeCompare(String(a.quincena))).slice(0, 8);
+          return hist.length ? '<div style="margin-bottom:10px"><b class="nota">Historial de pagos</b>' + hist.map((a) => '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--linea)"><span style="flex:1">' + esc(a.quincena) + ' · ' + (a.fecha_pago ? L.fechaTxt(a.fecha_pago) : 'sin fecha') + '</span><b>' + L.peso(a.monto) + '</b>' + (a.estado === 'ANULADO' ? '<span class="nota">anulado</span>' : '') + '</div>').join('') + '</div>' : ''; })() +
         '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center"><div class="ayuda"><div>Total</div><b>' + L.peso(sel.total) + '</b></div><div class="ayuda"><div>Pagado</div><b>' + L.peso(sel.pagado) + '</b></div><div class="ayuda" style="background:var(--azul);color:#fff"><div>Saldo</div><b>' + L.peso(sel.saldo) + '</b></div></div>' +
         (sel.saldo > 0.5 && tiene('RegistrarPago') ? '<form id="f-pago" style="display:flex;flex-direction:column;gap:10px"><div class="campos2"><label class="campo">Monto a pagar<input name="monto" inputmode="numeric" required value="' + Math.round(sel.saldo) + '"></label><label class="campo">Fecha de pago<input type="date" name="fecha" required value="' + hoy() + '"></label></div>' +
           '<label class="campo">Medio / observación<input name="obs" value="Transferencia"></label><label class="campo">N° transacción / comprobante<input name="comp" placeholder="Opcional (ej. ID de Mercado Pago)"></label>' +
@@ -642,6 +667,22 @@
         await dialogo('Revisar ' + L.quincenaTxt(q), lista.length ? '<p class="nota" style="margin:0">' + lista.length + ' cosas que conviene corregir antes de pagar:</p><div style="max-height:55vh;overflow:auto"><table><tbody>' +
           lista.map((x) => '<tr><td>' + est(x[0], tipo(x[0])) + '</td><td class="gris" style="white-space:nowrap">' + L.fechaTxt(x[1]).slice(0, 5) + ' ' + esc(x[2]) + '</td><td><b>' + esc(x[3]) + '</b><div class="nota">' + esc(x[4]) + '</div></td></tr>').join('') + '</tbody></table></div>'
           : '<p style="margin:0">Todo en orden: no hay planificados sin confirmar, turnos duplicados, pagos en $0 ni personas fuera de la base.</p>', { boton: 'Cerrar', sinCancelar: true });
+        return;
+      }
+      if (b.dataset.acc === 'pagar-varios') {
+        const marcados = [...v.querySelectorAll('input[data-pv]:checked')].map((i) => i.dataset.pv);
+        if (!marcados.length) return mensaje('Marca al menos una persona.', true);
+        const lista = filas.filter((f) => marcados.includes(f.nombre));
+        const total = lista.reduce((a, f) => a + f.saldo, 0);
+        if (!(await confirmar('Pagar a varias personas', 'Registrar el pago de ' + lista.length + ' persona(s) por ' + L.peso(total) + ' (saldo completo de cada una)?', 'Registrar'))) return;
+        try {
+          for (const f of lista) {
+            const per2 = L.buscarPersona(personas, f.nombre, f.rut);
+            await DB.registrarAbono({ nombre: f.nombre, rut: f.rut || (per2 && per2.rut) || '', quincena: q.clave, monto: f.saldo, fecha_pago: hoy(), obs: 'Pago múltiple', comprobante: '' });
+          }
+          mensaje('Pagos registrados: ' + lista.length + ' persona(s), ' + L.peso(total) + '.');
+          vistaPagos(v, filtro);
+        } catch (e) { falla(e); }
         return;
       }
       if (b.dataset.acc === 'copiar') { await copiarTransferencia(sel, per, q); return; }
