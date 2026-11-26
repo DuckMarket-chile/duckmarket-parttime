@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.16';
+  const VERSION = '2026.11.26.17';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -1119,6 +1119,18 @@
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th>' + etiq.map((e) => '<th class="num">' + esc(e) + '</th>').join('') + '<th class="num">Mes actual (hasta hoy)</th><th>Tendencia</th></tr></thead><tbody>' + filasTend + '</tbody></table></div></section>';
     const presTablero = '<section class="caja" style="margin-top:14px"><h2>Presupuesto contra lo real</h2><p class="nota" style="margin:0 0 8px">Gastado hasta hoy y proyección al cierre del mes, calculada desde el día 5 con el ritmo de gasto de este mes.</p>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Presupuesto</th><th class="num">Gastado</th><th class="num">% usado</th><th class="num">Proyección al cierre</th><th>Estado</th></tr></thead><tbody>' + filasPres + '</tbody></table></div></section>';
+    // costo promedio por turno: gasto / cantidad de turnos, este mes hasta hoy contra el mismo período del mes anterior
+    const cantT = (lista, s2) => lista.filter((t) => !s2 || t.sucursal === s2).length;
+    const promT = (lista, s2) => { const n = cantT(lista, s2); return n ? gasto(lista, s2) / n : null; };
+    const filaCosto = (s2, etiqueta) => {
+      const pa = promT(tAct, s2), pp = promT(tPrev, s2);
+      const varTxt = pa === null || pp === null ? '<span class="gris">Sin base</span>' : pctFlecha((pa - pp) / pp * 100);
+      return '<tr><td class="fuerte" data-t="Local">' + esc(etiqueta || s2) + '</td><td class="num" data-t="Turnos este mes">' + cantT(tAct, s2) + '</td><td class="num" data-t="Costo este mes">' + pesoV(gasto(tAct, s2)) + '</td><td class="num fuerte" data-t="Promedio por turno">' + (pa === null ? '—' : pesoV(pa)) + '</td><td class="num" data-t="Promedio mes anterior">' + (pp === null ? '—' : pesoV(pp)) + '</td><td data-t="Variación">' + varTxt + '</td></tr>';
+    };
+    const costoTablero = '<section class="caja" style="margin-top:14px"><h2>Costo promedio por turno</h2><p class="nota" style="margin:0 0 8px">Gasto dividido por la cantidad de turnos. Este mes va hasta hoy y se compara con el mismo período del mes anterior.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Turnos este mes</th><th class="num">Costo este mes</th><th class="num">Promedio por turno</th><th class="num">Promedio mes anterior</th><th>Variación</th></tr></thead><tbody>' +
+      visibles().map((s2) => filaCosto(s2)).join('') + (visibles().length > 1 ? filaCosto(null, 'TOTAL') : '') +
+      '</tbody></table></div></section>';
     v.innerHTML = cabecera('Tablero', 'Indicadores del mes: gasto por local comparado con el mismo período del mes anterior.') +
       '<section class="tarjetas">' +
       tarjeta('Gasto de este mes', pesoV(sumAct), tAct.length + ' turnos · ' + (sumPrev ? pctFlecha((sumAct - sumPrev) / sumPrev * 100) + ' vs mes anterior' : 'sin base de comparación')) +
@@ -1131,7 +1143,7 @@
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
       filasSemaforo(filas) +
       '</tbody></table></div></section>' +
-      tendTablero + presTablero + '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
+      tendTablero + costoTablero + presTablero + '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Gasto de los últimos 6 meses</h2>' + columnas + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Part-time del mes: turnos y pagos</h2>' +
       (ranking.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' +
