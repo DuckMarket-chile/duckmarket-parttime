@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.23';
+  const VERSION = '2026.11.26.24';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -687,7 +687,7 @@
         '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center"><div class="ayuda"><div>Total</div><b>' + L.peso(sel.total) + '</b></div><div class="ayuda"><div>Pagado</div><b>' + L.peso(sel.pagado) + '</b></div><div class="ayuda" style="background:var(--azul);color:#fff"><div>Saldo</div><b>' + L.peso(sel.saldo) + '</b></div></div>' +
         (sel.saldo > 0.5 && tiene('RegistrarPago') ? '<form id="f-pago" style="display:flex;flex-direction:column;gap:10px"><div class="campos2"><label class="campo">Monto a pagar<input name="monto" inputmode="numeric" required value="' + Math.round(sel.saldo) + '"></label><label class="campo">Fecha de pago<input type="date" name="fecha" required value="' + hoy() + '"></label></div>' +
           '<label class="campo">Medio / observación<input name="obs" value="Transferencia"></label><label class="campo">N° transacción / comprobante<input name="comp" placeholder="Opcional (ej. ID de Mercado Pago)"></label>' +
-          '<label class="campo" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="emitir"> Emitir comprobante con número al registrar el pago</label><button class="btn ama" type="submit">Registrar pago</button><p class="nota">Si pagas menos que el saldo queda como abono y el resto sigue pendiente.</p></form>' : '<div class="ayuda">' + (sel.saldo < -0.5 ? 'Se pagó ' + L.peso(-sel.saldo) + ' de más: revisa los pagos.' : sel.saldo > 0.5 ? 'Saldo pendiente de ' + L.peso(sel.saldo) + '.' : 'Quincena pagada completa.') + '</div>') + '</div>' : '') + '</section>';
+          '<label class="campo" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="imprimir"> Imprimir comprobante (PDF) al registrar el pago</label><button class="btn ama" type="submit">Registrar pago</button><p class="nota">Si pagas menos que el saldo queda como abono y el resto sigue pendiente.</p></form>' : '<div class="ayuda">' + (sel.saldo < -0.5 ? 'Se pagó ' + L.peso(-sel.saldo) + ' de más: revisa los pagos.' : sel.saldo > 0.5 ? 'Saldo pendiente de ' + L.peso(sel.saldo) + '.' : 'Quincena pagada completa.') + '</div>') + '</div>' : '') + '</section>';
 
     $('#g-q', v).onchange = (e) => { S.quincena = e.target.value; S.pagoSel = null; vistaPagos(v, filtro); };
     $('#g-suc', v).onchange = (e) => { S.pagoSuc = e.target.value; vistaPagos(v, filtro); };
@@ -746,8 +746,10 @@
       if (monto > sel.saldo + 0.5 && !(await confirmar('Monto mayor que el saldo', 'Vas a pagar ' + L.peso(monto) + ' y el saldo es ' + L.peso(sel.saldo) + '. ¿Registrar igual?'))) return;
       try {
         const id = await DB.registrarAbono({ nombre: sel.nombre, rut: sel.rut || (per && per.rut) || '', quincena: q.clave, monto, fecha_pago: fp.fecha.value, obs: fp.obs.value.trim(), comprobante: fp.comp.value.trim() });
-        let txtCp = ''; if (fp.emitir.checked) { const n = await DB.emitirComprobantePartime(Number(id)); txtCp = ' Comprobante ' + ptNum(n) + ' emitido.'; }
-        mensaje('Pago N°' + id + ' registrado: ' + sel.nombre + ' ' + L.peso(monto) + '.' + txtCp); vistaPagos(v, filtro);
+        const n = await DB.emitirComprobantePartime(Number(id)); // el comprobante interno siempre se emite
+        mensaje('Pago N°' + id + ' registrado: ' + sel.nombre + ' ' + L.peso(monto) + '. Comprobante ' + ptNum(n) + '.');
+        await vistaPagos(v, filtro);
+        if (fp.imprimir && fp.imprimir.checked) { const bp = v.querySelector('button[data-acc="pdf"][data-id="' + id + '"]'); if (bp) bp.click(); }
       } catch (e) { falla(e); }
     });
   }
