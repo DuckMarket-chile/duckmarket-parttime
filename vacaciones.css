@@ -64,7 +64,9 @@
 .comp-tabla th, .comp-tabla td { border-bottom: 1px solid #ddd; padding: 9px 8px; text-align: left; }
 .comp-tabla th { width: 42%; background: #f4f6f9; font-weight: 600; }
 .comp-nota { font-size: 11px; color: #666; margin: 14px 0 0; }
-.comp-firmas { display: flex; justify-content: space-between; gap: 40px; margin-top: 56px; font-size: 13px; }
+.comp-firmas { display: flex; justify-content: space-between; gap: 40px; margin-top: 110px; font-size: 13px; }
+.comp-firmas small { display: block; color: #333; margin-top: 2px; }
+.comp-firmas b { display: block; }
 .comp-firmas > div { flex: 1; text-align: center; } .comp-firmas span { display: block; border-top: 1px solid #111; margin-bottom: 6px; }
 @media print {
   body * { visibility: hidden; }

@@ -316,7 +316,8 @@
         fila('Fecha de emisión', hoyTxt) +
       '</table>' +
       '<p class="comp-nota">Saldo calculado al 21-11-2026 con el libro de vacaciones; ajustar si hay otras vacaciones tomadas después de esa fecha.</p>' +
-      '<div class="comp-firmas"><div><span></span>Empresa</div><div><span></span>Trabajador</div></div></section>';
+      '<div class="comp-firmas"><div><span></span><b>Establecimiento Centro Ltda.</b><small>RUT: 78.966.690-3</small></div>' +
+        '<div><span></span><b>' + esc(p.nombre || '') + '</b><small>RUT: ' + esc(st.ruts[s2.personal_id] || '') + '</small></div></div></section>';
   }
 
   // ================================================================== reportes
