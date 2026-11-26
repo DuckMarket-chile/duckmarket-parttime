@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.4';
+  const VERSION = '2026.11.26.5';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -580,6 +580,11 @@
     const tot = filas.reduce((s, f) => s + f.total, 0), pag = filas.reduce((s, f) => s + f.pagado, 0), conSaldo = filas.filter((f) => f.saldo > 0.5);
     let sel = filas.find((f) => f.nombre === S.pagoSel) || vis[0];
     const per = sel ? L.buscarPersona(personas, sel.nombre, sel.rut) : null;
+    // panaderos: sus pagos se muestran aparte (si alguno de sus turnos de la quincena es de Panadería)
+    const esPan = (f) => f.turnos.some((t) => t.funcion === 'PANADERIA');
+    const visResto = vis.filter((f) => !esPan(f)), visPan = vis.filter(esPan);
+    const tablaPagos = (lista) => '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Días</th><th class="num">Total</th><th class="num">Pagado</th><th class="num">Saldo</th><th>Estado</th></tr></thead><tbody>' + lista.map((f) => '<tr class="clic' + (sel && f.nombre === sel.nombre ? ' sel' : '') + '" data-acc="ver" data-n="' + esc(f.nombre) + '"><td class="fuerte" data-t="Persona"><button class="enlace" data-acc="ver" data-n="' + esc(f.nombre) + '">' + esc(f.nombre) + '</button></td><td class="gris" data-t="Sucursales">' + esc(f.sucursales) + '</td><td class="num" data-t="Días">' + f.dias + '</td>' +
+          '<td class="num" data-t="Total">' + L.peso(f.total) + '</td><td class="num gris" data-t="Pagado">' + L.peso(f.pagado) + '</td><td class="num fuerte" data-t="Saldo">' + L.peso(f.saldo) + '</td><td data-t="Estado">' + est(f.estado === 'PARCIAL' ? 'Abono' : f.estado.charAt(0) + f.estado.slice(1).toLowerCase(), ESTADO_PAGO[f.estado]) + '</td></tr>').join('') + '</tbody></table></div>';
 
     v.innerHTML = cabecera('Pagos quincenales', 'Cada persona suma lo trabajado en todas las sucursales. Un pago bloquea los cambios de esos turnos para los encargados.',
       '<label class="campo">Quincena<select id="g-q">' + opciones(qs.map((x) => [x.clave, L.quincenaTxt(x)]), S.quincena) + '</select></label><button class="btn" data-acc="revisar">Revisar antes de pagar</button>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
@@ -587,10 +592,7 @@
       tarjeta('Saldo por pagar', L.peso(tot - pag), conSaldo.length + ' personas con saldo', true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><div class="caja-tit"><h2>Personas de la quincena</h2><label class="campo"><span class="sr">Estado</span><select id="g-est">' + opciones(['Todos', 'Con saldo', 'PENDIENTE', 'PARCIAL', 'PAGADO', 'PAGADO DE MÁS'], filtro.estado) + '</select></label>' +
       '<label class="campo"><span class="sr">Buscar persona</span><input type="search" id="g-txt" placeholder="Buscar persona" value="' + esc(filtro.texto) + '"></label></div>' +
-      (vis.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Días</th><th class="num">Total</th><th class="num">Pagado</th><th class="num">Saldo</th><th>Estado</th></tr></thead><tbody>' +
-        vis.map((f) => '<tr class="clic' + (sel && f.nombre === sel.nombre ? ' sel' : '') + '" data-acc="ver" data-n="' + esc(f.nombre) + '"><td class="fuerte" data-t="Persona"><button class="enlace" data-acc="ver" data-n="' + esc(f.nombre) + '">' + esc(f.nombre) + '</button></td><td class="gris" data-t="Sucursales">' + esc(f.sucursales) + '</td><td class="num" data-t="Días">' + f.dias + '</td>' +
-          '<td class="num" data-t="Total">' + L.peso(f.total) + '</td><td class="num gris" data-t="Pagado">' + L.peso(f.pagado) + '</td><td class="num fuerte" data-t="Saldo">' + L.peso(f.saldo) + '</td><td data-t="Estado">' + est(f.estado === 'PARCIAL' ? 'Abono' : f.estado.charAt(0) + f.estado.slice(1).toLowerCase(), ESTADO_PAGO[f.estado]) + '</td></tr>').join('') +
-        '</tbody></table></div>' : '<div class="vacio">No hay personas con ese filtro en esta quincena.</div>') + '</div>' +
+      (vis.length ? tablaPagos(visResto) + (visPan.length ? '<p class="nota" style="margin:12px 0 6px;font-weight:700">Panadería · pagos aparte</p>' + tablaPagos(visPan) : '') : '<div class="vacio">No hay personas con ese filtro en esta quincena.</div>') + '</div>' +
       (sel ? '<div class="caja" id="detalle"><div><h2>' + esc(sel.nombre) + '</h2><p class="nota">' + esc(L.quincenaTxt(q)) + (per && per.banco ? ' · ' + esc(per.banco) + ' ' + esc(per.tipo_cuenta) + ' ' + esc(per.cuenta) + (per.rut ? ' · RUT ' + esc(per.rut) : '') : '') + '</p></div>' +
         '<div>' + sel.turnos.map((t) => '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--linea)"><span class="gris" style="width:48px">' + L.fechaTxt(t.fecha).slice(0, 5) + '</span><span style="flex:1;font-weight:600">' + esc(t.sucursal) + '</span><span>' + L.peso(t.total) + '</span></div>').join('') + '</div>' +
         (sel.abonos.length ? '<div><b class="nota">Pagos</b>' + sel.abonos.map((a) => '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--linea)' + (a.estado === 'ANULADO' ? ';text-decoration:line-through;color:var(--gris)' : '') + '"><span style="flex:1">N°' + a.id + ' · ' + L.fechaTxt(a.fecha_pago) + (a.comprobante ? ' · MP ' + esc(a.comprobante) : '') + '<div class="nota">' + esc(a.obs) + '</div></span><b>' + L.peso(a.monto) + '</b>' +
