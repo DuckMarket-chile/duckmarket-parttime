@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.10';
+  const VERSION = '2026.11.26.11';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -858,6 +858,21 @@
     visibles().forEach((x) => { accPor[x] = { n: 0, monto: 0 }; });
     anio.forEach((t) => { const x = accPor[t.sucursal]; if (x) { x.n++; x.monto += Number(t.total); } });
     const accTot = Object.values(accPor).reduce((a, x) => a + x.monto, 0);
+    // presupuesto del mes por local: la administración lo cambia; todos lo ven
+    const presMes = await DB.presupuestos(mes).catch(() => []);
+    const gastoSuc = (s2) => turnos.filter((t) => t.sucursal === s2).reduce((a, t) => a + Number(t.total), 0);
+    const esAdmin = !!S.perfil.admin;
+    const filasPres = visibles().map((s2) => {
+      const pr = (presMes.find((x) => x.sucursal === s2) || {}).monto || 0;
+      const g = gastoSuc(s2);
+      const pct = pr ? g / pr * 100 : null;
+      const estado = pct === null ? '<span class="gris">Sin presupuesto</span>' : pct > 100 ? '<span class="mal">● Superado</span>' : pct >= 90 ? '<span class="aviso">● Cerca del límite</span>' : '<span class="ok">● Dentro</span>';
+      return '<tr><td class="fuerte" data-t="Local">' + esc(s2) + '</td><td class="num" data-t="Presupuesto">' + (esAdmin ? '<input type="number" min="0" step="1000" data-pres="' + esc(s2) + '" value="' + pr + '" style="width:130px;text-align:right">' : pesoV(pr)) +
+        '</td><td class="num" data-t="Gastado">' + pesoV(g) + '</td><td class="num" data-t="% usado">' + (pct === null ? '—' : pct.toFixed(0) + '%') + '</td><td data-t="Estado">' + estado + '</td></tr>';
+    }).join('');
+    const presHtml = '<section class="caja" style="margin-bottom:14px"><h2>Presupuesto del mes por local</h2><p class="nota" style="margin:0 0 8px">Aviso al llegar al 90% del presupuesto y alerta al superarlo.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Presupuesto</th><th class="num">Gastado</th><th class="num">% usado</th><th>Estado</th></tr></thead><tbody>' + filasPres + '</tbody></table></div>' +
+      (esAdmin ? '<button type="button" class="btn ama" data-acc="guardar-pres" style="margin-top:10px">Guardar presupuesto</button>' : '') + '</section>';
     const accHtml = '<section class="caja" style="margin-bottom:14px"><h2>Acumulado del año (enero a la fecha)</h2>' +
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Sucursal</th><th class="num">Turnos</th><th class="num">Total</th><th class="num">% del total</th></tr></thead><tbody>' +
       Object.keys(accPor).map((k) => '<tr><td class="fuerte" data-t="Sucursal">' + esc(k) + '</td><td class="num" data-t="Turnos">' + accPor[k].n + '</td><td class="num fuerte" data-t="Total">' + pesoV(accPor[k].monto) + '</td><td class="num" data-t="% del total">' + (accTot ? (accPor[k].monto / accTot * 100).toFixed(1) : '0') + '%</td></tr>').join('') +
@@ -893,14 +908,26 @@
     const pers = armarPersonas(turnos.filter((t) => t.funcion !== 'PANADERIA'));
     const persPan = armarPersonas(turnos.filter((t) => t.funcion === 'PANADERIA'));
     v.innerHTML = cabecera('Reportes', 'Resumen del mes y cumplimiento de la planificación.', '<label class="campo">Sucursal<select id="r-suc">' + opciones([['TODAS', 'Todas'], ['ANDES', 'ANDES'], ['ENCINAS', 'ENCINAS'], ['SAN MARTIN', 'SAN MARTIN']], S.repSuc || 'TODAS') + '</select></label>' + '<label class="campo">Mes<select id="r-mes">' + opciones(meses, mes) + '</select></label>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
-      compHtml + funcHtml + accHtml + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
+      compHtml + funcHtml + accHtml + presHtml + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><h2>Por persona</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th><th class="num">Mes anterior</th><th class="num">Variación</th></tr></thead><tbody>' +
       pers.map((x) => { const ant = prevPers[L.normNombre(x.nombre)] || 0; return '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td><td class="num" data-t="Mes anterior">' + pesoV(ant) + '</td><td class="num" data-t="Variación">' + (ant ? pctFlecha((x.total - ant) / ant * 100) : '—') + '</td></tr>'; }).join('') +
       '</tbody></table></div></div>' + (persPan.length ? '<div class="caja ancho2" style="margin-top:14px"><h2>Panadería · pagos aparte</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th></tr></thead><tbody>' + persPan.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td></tr>').join('') + '</tbody></table></div></div>' : '') + '<div class="caja"><h2>Asistencia a lo planificado</h2>' + (asis.size ? '<table class="tarjetas-movil"><thead><tr><th>Persona</th><th class="num">Plan.</th><th class="num">Asistió</th><th class="num">Faltó</th></tr></thead><tbody>' +
         [...asis.values()].sort((a, b) => b.no - a.no || b.plan - a.plan).map((x) => '<tr><td>' + esc(x.nombre) + '</td><td class="num">' + x.plan + '</td><td class="num">' + x.si + '</td><td class="num" style="color:' + (x.no ? 'var(--mal)' : 'inherit') + '">' + x.no + (x.pend ? ' <span class="nota">(' + x.pend + ' sin confirmar)</span>' : '') + '</td></tr>').join('') + '</tbody></table>' : '<p class="nota">No hay planificación en este mes.</p>') + '</div></section>';
+    async function guardarPresupuestos(vv, m) {
+      try {
+        for (const i of [...vv.querySelectorAll('input[data-pres]')]) {
+          const monto = L.num(i.value);
+          if (!(monto >= 0)) return mensaje('El presupuesto de ' + i.dataset.pres + ' no es válido.', true);
+          await DB.guardarPresupuesto({ mes: m, sucursal: i.dataset.pres, monto });
+        }
+        mensaje('Presupuesto guardado.');
+        vistaReportes(vv, m);
+      } catch (e) { falla(e); }
+    }
     $('#r-mes', v).onchange = (e) => vistaReportes(v, e.target.value);
     $('#r-suc', v).onchange = (e) => { S.repSuc = e.target.value; vistaReportes(v, mes); };
     v.onclick = (ev) => {
+      if (ev.target.closest('[data-acc=guardar-pres]')) { guardarPresupuestos(v, mes); return; }
       if (!ev.target.closest('[data-acc=exportar]')) return;
       descargarExcel('PartTime_Resumen_' + mes + '.csv', [['Grupo', 'Persona', 'Sucursales', 'Turnos', 'Horas', 'Total']].concat(pers.map((x) => ['Resto', x.nombre, [...x.sucs].join(', '), x.turnos, L.horasTxt(x.horas), montos() ? x.total : '']), persPan.map((x) => ['Panadería', x.nombre, [...x.sucs].join(', '), x.turnos, L.horasTxt(x.horas), montos() ? x.total : ''])));
     };

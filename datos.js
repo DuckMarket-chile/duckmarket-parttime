@@ -81,6 +81,8 @@
       },
       async eliminarDia(fecha) { ok(await sb.from('dias').delete().eq('fecha', fecha)); },
       feriados: () => todo(() => sb.from('feriados').select('*').order('fecha')),
+      presupuestos: (mes) => todo(() => sb.from('presupuestos').select('*').eq('mes', mes)),
+      async guardarPresupuesto(p) { ok(await sb.from('presupuestos').upsert({ mes: p.mes, sucursal: p.sucursal, monto: p.monto, actualizado_por: perfil.usuario }, { onConflict: 'mes,sucursal' })); },
 
       plan: (f) => todo(() => { let q = sb.from('plan').select('*').order('fecha').order('entrada').order('id');
         if (f.desde) q = q.gte('fecha', f.desde); if (f.hasta) q = q.lte('fecha', f.hasta); if (f.sucursal) q = q.eq('sucursal', f.sucursal); return q; }),
@@ -133,7 +135,7 @@
       'Ignacio Paredes Silva', 'Javiera Núñez Toro', 'Tomás Fuentes Reyes', 'Andrea Molina Vera'];
     const personas = nombres.map((n, i) => ({ id: i + 1, nombre: n, rut: '', telefono: '9 ' + (61234560 + i), direccion: '', correo: '', banco: i % 2 ? 'BancoEstado' : 'Banco de Chile',
       tipo_cuenta: i % 2 ? 'Cuenta RUT' : 'Cuenta Corriente', cuenta: String(10000000 + i * 137), activo: true, variantes: i === 2 ? 'VALENTINA SOTO P' : '', obs: '', actualizado: '', usuario: '' }));
-    let turnos = [], abonos = [], plan = [], dias = [], historial = [], sig = { t: 1, a: 1, p: 1, h: 1 };
+    let turnos = [], abonos = [], plan = [], dias = [], historial = [], sig = { t: 1, a: 1, p: 1, h: 1 }, presup = [];
     let perfil = null;
     const suc = ['ANDES', 'ENCINAS', 'SAN MARTIN'];
     const q = L.quincenaDe(hoy), qAnt = L.quincenaDe(L.sumarDias(q.desde, -1));
@@ -240,6 +242,8 @@
         if (v) { Object.assign(v, x); anotar('DÍA MODIFICADO', 'dias', v); } else { dias.push(Object.assign({ activo: true, obs: '' }, x)); anotar('DÍA AGREGADO', 'dias', x); }
       },
       async eliminarDia(f) { exigir(permiso('DiasPlan')); const v = dias.find((y) => y.fecha === f); dias = dias.filter((y) => y.fecha !== f); anotar('DÍA ELIMINADO', 'dias', v); },
+      presupuestos: (mes) => espera(presup.filter((x) => x.mes === mes)),
+      async guardarPresupuesto(p) { const i = presup.findIndex((x) => x.mes === p.mes && x.sucursal === p.sucursal); if (i >= 0) presup[i] = p; else presup.push(p); return espera(p); },
       feriados: () => espera([{ fecha: L.hoyChile().slice(0, 4) + '-12-08', nombre: 'Inmaculada Concepción', abierto: true }, { fecha: L.hoyChile().slice(0, 4) + '-12-25', nombre: 'Navidad', abierto: false }]),
       plan: (f) => espera(plan.filter((p) => ve(p.sucursal) && (!f.desde || p.fecha >= f.desde) && (!f.hasta || p.fecha <= f.hasta) && (!f.sucursal || p.sucursal === f.sucursal))
         .sort((a, b) => (a.fecha + a.entrada).localeCompare(b.fecha + b.entrada) || a.id - b.id)),
