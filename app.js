@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.20';
+  const VERSION = '2026.11.26.21';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -580,6 +580,32 @@
     try { await navigator.clipboard.writeText(texto); mensaje('Datos copiados. Pégalos en la transferencia.'); }
     catch (e) { window.prompt('Copia estos datos:', texto); }
   }
+  // comprobante de pago en PDF (descarga directa; jsPDF desde cdnjs)
+  function descargarComprobantePdf(a, sel, per, q) {
+    if (!window.jspdf) return mensaje('No se pudo cargar el generador de PDF. Revisa la conexión e intenta de nuevo.', true);
+    const doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4' });
+    const x = 20; let y = 25;
+    const fila = (k, v) => { doc.setFont('helvetica', 'bold'); doc.setFontSize(10); doc.text(k, x, y); doc.setFont('helvetica', 'normal'); doc.text(String(v), x + 62, y); y += 8; };
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.setTextColor(18, 53, 91); doc.text('Duck Market - Comprobante de pago', x, y); y += 7;
+    doc.setFontSize(10); doc.setTextColor(0, 0, 0); doc.setFont('helvetica', 'normal'); doc.text('Part-Time - N° ' + a.id, x, y); y += 4;
+    doc.setDrawColor(18, 53, 91); doc.setLineWidth(0.8); doc.line(x, y, 190, y); y += 10;
+    fila('Persona', sel.nombre);
+    fila('RUT', (per && per.rut) || '-');
+    fila('Banco / cuenta', per && per.banco ? (per.banco + ' ' + (per.tipo_cuenta || '') + ' ' + (per.cuenta || '')).trim() : '-');
+    fila('Quincena', L.quincenaTxt(q));
+    fila('Sucursales', sel.sucursales);
+    fila('Total de la quincena', L.peso(sel.total));
+    fila('Pagado antes de este pago', L.peso(sel.pagado - a.monto));
+    fila('Monto de este pago', L.peso(a.monto));
+    fila('Fecha de pago', a.fecha_pago ? L.fechaTxt(a.fecha_pago) : '-');
+    fila('Medio / observación', (a.obs || '-') + (a.comprobante ? ' - MP ' + a.comprobante : ''));
+    fila('Saldo que queda', L.peso(Math.max(sel.saldo, 0)));
+    y += 28;
+    doc.setLineWidth(0.3); doc.setDrawColor(120, 120, 120);
+    doc.line(x, y, x + 70, y); doc.line(120, y, 190, y); y += 5;
+    doc.setFontSize(9); doc.text('Recibí conforme: ' + sel.nombre, x, y); doc.text('Autorizado por', 120, y);
+    doc.save('Pago_' + a.id + '_' + sel.nombre.replace(/\s+/g, '_') + '.pdf');
+  }
   function abrirComprobante(a, sel, per, q) {
     const f = (d) => d ? L.fechaTxt(d) : '—';
     const html = '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Comprobante de pago N° ' + a.id + '</title><style>body{font-family:Arial,sans-serif;color:#111;margin:32px;max-width:720px}h1{color:#12355B;font-size:20px;margin:0 0 4px}.enc{border-bottom:3px solid #12355B;padding-bottom:10px;margin-bottom:18px}table{width:100%;border-collapse:collapse;font-size:14px}th,td{border-bottom:1px solid #ddd;padding:9px 8px;text-align:left}th{width:42%;background:#f4f6f9}.firmas{display:flex;justify-content:space-between;gap:40px;margin-top:70px;font-size:13px}.firmas div{flex:1;text-align:center}.firmas span{display:block;border-top:1px solid #111;margin-bottom:6px}</style></head><body>' +
@@ -652,7 +678,7 @@
       (sel ? '<div class="caja" id="detalle"><div><h2>' + esc(sel.nombre) + '</h2><p class="nota">' + esc(L.quincenaTxt(q)) + (per && per.banco ? ' · ' + esc(per.banco) + ' ' + esc(per.tipo_cuenta) + ' ' + esc(per.cuenta) + (per.rut ? ' · RUT ' + esc(per.rut) : '') : '') + '</p><button type="button" class="btn chico" data-acc="copiar">Copiar datos para transferir</button></div>' +
         '<div>' + sel.turnos.map((t) => '<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--linea)"><span class="gris" style="width:48px">' + L.fechaTxt(t.fecha).slice(0, 5) + '</span><span style="flex:1;font-weight:600">' + esc(t.sucursal) + '</span><span>' + L.peso(t.total) + '</span></div>').join('') + '</div>' +
         (sel.abonos.length ? '<div><b class="nota">Pagos</b>' + sel.abonos.map((a) => '<div style="display:flex;gap:8px;align-items:center;padding:6px 0;border-bottom:1px solid var(--linea)' + (a.estado === 'ANULADO' ? ';text-decoration:line-through;color:var(--gris)' : '') + '"><span style="flex:1">N°' + a.id + ' · ' + L.fechaTxt(a.fecha_pago) + (a.comprobante ? ' · MP ' + esc(a.comprobante) : '') + '<div class="nota">' + esc(a.obs) + '</div></span><b>' + L.peso(a.monto) + '</b>' +
-          (a.estado === 'VIGENTE' ? '<button class="btn chico" data-acc="comp" data-id="' + a.id + '">Comprobante</button>' : '') + (a.estado === 'VIGENTE' && tiene('AnularPago') ? '<button class="btn chico peligro" data-acc="anular" data-id="' + a.id + '">Anular</button>' : '') + '</div>').join('') + '</div>' : '') +
+          (a.estado === 'VIGENTE' ? '<button class="btn chico" data-acc="comp" data-id="' + a.id + '">Comprobante</button><button class="btn chico" data-acc="pdf" data-id="' + a.id + '">Descargar PDF</button>' : '') + (a.estado === 'VIGENTE' && tiene('AnularPago') ? '<button class="btn chico peligro" data-acc="anular" data-id="' + a.id + '">Anular</button>' : '') + '</div>').join('') + '</div>' : '') +
         (() => { const hist = abonos.filter((a) => L.normNombre(a.nombre) === L.normNombre(sel.nombre)).sort((a, b) => String(b.quincena).localeCompare(String(a.quincena))).slice(0, 8);
           return hist.length ? '<div style="margin-bottom:10px"><b class="nota">Historial de pagos</b>' + hist.map((a) => '<div style="display:flex;gap:8px;padding:4px 0;border-bottom:1px solid var(--linea)"><span style="flex:1">' + esc(a.quincena) + ' · ' + (a.fecha_pago ? L.fechaTxt(a.fecha_pago) : 'sin fecha') + '</span><b>' + L.peso(a.monto) + '</b>' + (a.estado === 'ANULADO' ? '<span class="nota">anulado</span>' : '') + '</div>').join('') + '</div>' : ''; })() +
         '<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;text-align:center"><div class="ayuda"><div>Total</div><b>' + L.peso(sel.total) + '</b></div><div class="ayuda"><div>Pagado</div><b>' + L.peso(sel.pagado) + '</b></div><div class="ayuda" style="background:var(--azul);color:#fff"><div>Saldo</div><b>' + L.peso(sel.saldo) + '</b></div></div>' +
@@ -694,6 +720,7 @@
       }
       if (b.dataset.acc === 'copiar') { await copiarTransferencia(sel, per, q); return; }
       if (b.dataset.acc === 'comp') { const a = sel.abonos.find((x) => String(x.id) === b.dataset.id); if (a) abrirComprobante(a, sel, per, q); return; }
+      if (b.dataset.acc === 'pdf') { const a = sel.abonos.find((x) => String(x.id) === b.dataset.id); if (a) descargarComprobantePdf(a, sel, per, q); return; }
       if (b.dataset.acc === 'anular') {
         const a = sel.abonos.find((x) => String(x.id) === b.dataset.id);
         if (!(await confirmar('Anular pago', '¿Anular el pago N°' + a.id + ' de ' + a.nombre + ' por ' + L.peso(a.monto) + '?\nEl saldo de la quincena vuelve a quedar pendiente.', 'Anular', true))) return;
