@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.12';
+  const VERSION = '2026.11.26.13';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -830,6 +830,53 @@
   }
 
   // ================================================================== REPORTES
+  // exportación mensual para contabilidad: Excel con 4 hojas (resumen, detalle por persona, por función, pagos del mes)
+  async function exportarMensualXlsx(mes, turnos, sucs, pers, persPan) {
+    if (typeof XLSX === 'undefined') return mensaje('No se pudo cargar el generador de Excel. Revisa la conexión y vuelve a intentar.', true);
+    const esPan = (t) => t.funcion === 'PANADERIA';
+    const quinc = [mes + '-Q1', mes + '-Q2'];
+    const todos = await DB.abonos().catch(() => []);
+    const pagos = todos.filter((a) => a.estado === 'VIGENTE' && quinc.includes(a.quincena));
+    const libro = XLSX.utils.book_new();
+    // 1) resumen por sucursal
+    const r1 = [['Sucursal', 'Turnos', 'Total sin panadería', 'Panadería', 'Total con panadería']];
+    let tt = [0, 0, 0, 0];
+    sucs.forEach((s2) => {
+      const ts = turnos.filter((t) => t.sucursal === s2);
+      const pan = ts.filter(esPan).reduce((a, t) => a + Number(t.total), 0);
+      const tot = ts.reduce((a, t) => a + Number(t.total), 0);
+      r1.push([s2, ts.length, Math.round(tot - pan), Math.round(pan), Math.round(tot)]);
+      tt = [tt[0] + ts.length, tt[1] + (tot - pan), tt[2] + pan, tt[3] + tot];
+    });
+    r1.push(['TOTAL', tt[0], Math.round(tt[1]), Math.round(tt[2]), Math.round(tt[3])]);
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r1), 'Resumen');
+    // 2) detalle por persona
+    const det = {};
+    turnos.forEach((t) => {
+      const k = L.normNombre(t.nombre);
+      const x = det[k] || (det[k] = { nombre: t.nombre, sucs: new Set(), turnos: 0, horas: 0, total: 0, pan: 0, loc: 0 });
+      x.sucs.add(t.sucursal); x.turnos++; x.horas += Number(t.horas); x.total += Number(t.total);
+      if (esPan(t)) x.pan += Number(t.total);
+      x.loc += Number(t.locomocion);
+    });
+    const r2 = [['Persona', 'Sucursales', 'Turnos', 'Horas', 'Total', 'Panadería', 'Locomoción']];
+    Object.values(det).sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach((x) =>
+      r2.push([x.nombre, [...x.sucs].join(', '), x.turnos, Math.round(x.horas * 100) / 100, Math.round(x.total), Math.round(x.pan), Math.round(x.loc)]));
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r2), 'Detalle por persona');
+    // 3) por función
+    const FUN = { CAJA: 'Caja', ROTICERIA: 'Rotisería', REPONEDOR: 'Reponedor', ENCARGADO: 'Encargado', PANADERIA: 'Panadería', '': 'Sin definir' };
+    const porF = {};
+    turnos.forEach((t) => { const k = t.funcion || ''; const x = porF[k] || (porF[k] = { n: 0, m: 0 }); x.n++; x.m += Number(t.total); });
+    const r3 = [['Función', 'Turnos', 'Total']];
+    Object.keys(FUN).filter((k) => porF[k]).forEach((k) => r3.push([FUN[k], porF[k].n, Math.round(porF[k].m)]));
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r3), 'Por función');
+    // 4) pagos del mes
+    const r4 = [['Quincena', 'Persona', 'Monto pagado', 'Fecha de pago', 'Total de la quincena', 'Saldo', 'Observación']];
+    pagos.sort((a, b) => String(a.quincena).localeCompare(String(b.quincena)) || String(a.nombre).localeCompare(String(b.nombre)))
+      .forEach((a) => r4.push([a.quincena, a.nombre, Math.round(a.monto), a.fecha_pago || '', a.total_quincena != null ? Math.round(a.total_quincena) : '', a.saldo_despues != null ? Math.round(a.saldo_despues) : '', a.obs || '']));
+    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r4), 'Pagos del mes');
+    XLSX.writeFile(libro, 'PartTime_' + mes + '_contabilidad.xlsx');
+  }
   async function vistaReportes(v, mes) {
     mes = mes || hoy().slice(0, 7);
     const desde = mes + '-01', hasta = L.iso(new Date(Number(mes.slice(0, 4)), Number(mes.slice(5, 7)), 0));
@@ -929,7 +976,7 @@
     v.onclick = (ev) => {
       if (ev.target.closest('[data-acc=guardar-pres]')) { guardarPresupuestos(v, mes); return; }
       if (!ev.target.closest('[data-acc=exportar]')) return;
-      descargarExcel('PartTime_Resumen_' + mes + '.csv', [['Grupo', 'Persona', 'Sucursales', 'Turnos', 'Horas', 'Total']].concat(pers.map((x) => ['Resto', x.nombre, [...x.sucs].join(', '), x.turnos, L.horasTxt(x.horas), montos() ? x.total : '']), persPan.map((x) => ['Panadería', x.nombre, [...x.sucs].join(', '), x.turnos, L.horasTxt(x.horas), montos() ? x.total : ''])));
+      exportarMensualXlsx(mes, turnos, visibles(), pers, persPan);
     };
   }
 
