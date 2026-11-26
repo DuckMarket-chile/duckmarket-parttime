@@ -115,7 +115,7 @@ tfoot td { font-weight: 700; border-top: 2px solid var(--borde); }
 .mensaje { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px)); padding: 12px 18px; border-radius: 12px; background: var(--azul); color: #fff; font-weight: 600; box-shadow: 0 8px 24px rgba(18,53,91,.3); z-index: 50; white-space: pre-line; }
 .mensaje.mal { background: #8A1C0F; }
 .error { color: var(--mal); background: var(--malf); padding: 10px 12px; border-radius: 10px; font-size: 13px; font-weight: 600; white-space: pre-line; }
-dialog { border: 0; border-radius: 16px; padding: 0; width: min(520px, calc(100% - 24px)); max-height: calc(100vh - 24px); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+dialog { border: 0; border-radius: 16px; padding: 0; width: min(520px, calc(100% - 24px)); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
 dialog::backdrop { background: rgba(18,53,91,.45); }
 dialog form { padding: 22px; display: flex; flex-direction: column; gap: 12px; }
 .cargando { padding: 40px; text-align: center; color: var(--gris); }
