@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.5';
+  const VERSION = '2026.11.26.6';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -772,6 +772,22 @@
     const prevDesde = pMes + '-01', prevHasta = pMes + '-' + String(dPrev).padStart(2, '0');
     const actDesde = mes + '-01', actHasta = mes + '-' + String(dActual).padStart(2, '0');
     const turnosPrev = await DB.turnos({ desde: prevDesde, hasta: prevHasta });
+    // gasto por función: mes completo, y mes anterior completo para comparar
+    const turnosMesAnt = await DB.turnos({ desde: pMes + '-01', hasta: L.iso(new Date(pAy, pAm, 0)) }).catch(() => []);
+    const FUN_NOM = { CAJA: 'Caja', ROTICERIA: 'Rotisería', REPONEDOR: 'Reponedor', ENCARGADO: 'Encargado', PANADERIA: 'Panadería', '': 'Sin definir' };
+    const porFun = (lista) => { const m = {}; lista.forEach((t) => { const k = t.funcion || ''; const x = m[k] || (m[k] = { n: 0, monto: 0 }); x.n++; x.monto += Number(t.total); }); return m; };
+    const fa = porFun(turnos), fb = porFun(turnosMesAnt);
+    const totFun = turnos.reduce((a, t) => a + Number(t.total), 0);
+    const filasFun = Object.keys(FUN_NOM).filter((k) => fa[k] || fb[k]).map((k) => {
+      const a = fa[k] || { n: 0, monto: 0 }, b = fb[k] || { n: 0, monto: 0 };
+      const pct = b.monto ? (a.monto - b.monto) / b.monto * 100 : null;
+      return '<tr><td class="fuerte" data-t="Función">' + esc(FUN_NOM[k]) + '</td><td class="num" data-t="Turnos">' + a.n + '</td><td class="num" data-t="Monto">' + pesoV(a.monto) +
+        '</td><td class="num" data-t="% del total">' + (totFun ? (a.monto / totFun * 100).toFixed(1) : '0') + '%</td><td class="num" data-t="Mes anterior">' + pesoV(b.monto) +
+        '</td><td class="num" data-t="Variación">' + (pct === null ? '—' : pctFlecha(pct)) + '</td></tr>';
+    }).join('');
+    const funcHtml = '<section class="caja" style="margin-bottom:14px"><h2>Gasto por función</h2><p class="nota" style="margin:0 0 8px">Cuánto se pagó en cada función este mes, comparado con el mes anterior completo.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Función</th><th class="num">Turnos</th><th class="num">Monto</th><th class="num">% del total</th><th class="num">Mes anterior</th><th class="num">Variación</th></tr></thead><tbody>' +
+      (filasFun || '<tr><td colspan="6" class="nota">Sin turnos este mes.</td></tr>') + '</tbody></table></div></section>';
     const gasto = (lista, s, d1, d2) => lista.filter((t) => t.sucursal === s && t.fecha >= d1 && t.fecha <= d2).reduce((a, t) => a + Number(t.total), 0);
     const filasComp = visibles().map((s) => { const a = gasto(turnos, s, actDesde, actHasta), b = gasto(turnosPrev, s, prevDesde, prevHasta); return { s, a, b, sem: semaforo(a, b) }; });
     const compHtml = '<section class="caja" style="margin-bottom:14px"><h2>Gasto por local: mes anterior vs este mes</h2>' +
@@ -792,7 +808,7 @@
     const pers = armarPersonas(turnos.filter((t) => t.funcion !== 'PANADERIA'));
     const persPan = armarPersonas(turnos.filter((t) => t.funcion === 'PANADERIA'));
     v.innerHTML = cabecera('Reportes', 'Resumen del mes y cumplimiento de la planificación.', '<label class="campo">Mes<select id="r-mes">' + opciones(meses, mes) + '</select></label>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
-      compHtml + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
+      compHtml + funcHtml + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><h2>Por persona</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th></tr></thead><tbody>' +
       pers.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td></tr>').join('') +
       '</tbody></table></div></div>' + (persPan.length ? '<div class="caja ancho2" style="margin-top:14px"><h2>Panadería · pagos aparte</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th></tr></thead><tbody>' + persPan.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td></tr>').join('') + '</tbody></table></div></div>' : '') + '<div class="caja"><h2>Asistencia a lo planificado</h2>' + (asis.size ? '<table class="tarjetas-movil"><thead><tr><th>Persona</th><th class="num">Plan.</th><th class="num">Asistió</th><th class="num">Faltó</th></tr></thead><tbody>' +
