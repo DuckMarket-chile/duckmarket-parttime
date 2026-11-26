@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.11';
+  const VERSION = '2026.11.26.12';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -995,6 +995,22 @@
     const maxL = Math.max(1, ...filas.map((x) => Math.max(x.a, x.b)));
     const barrasLocal = '<div class="barras">' + filas.map((x) => '<div class="barra-fila"><span class="fuerte">' + esc(x.s) + '</span><div><div class="barra"><i style="width:' + (x.b / maxL * 100).toFixed(1) + '%;background:#9FB3CA"></i></div><div class="barra" style="margin-top:4px"><i style="width:' + (x.a / maxL * 100).toFixed(1) + '%"></i></div></div><span class="num">' + pesoV(x.a) + '</span></div>').join('') + '</div><p class="nota" style="margin-top:8px">Gris: mes anterior · Azul: este mes</p>';
     const rojos = filas.filter((x) => x.sem.cls === 'mal').length;
+    // presupuesto contra lo real: gastado hasta hoy y proyección al cierre del mes
+    const presMes = await DB.presupuestos(mes).catch(() => []);
+    const diasMes = ultDia(ay, am);
+    const filasPres = visibles().map((s2) => {
+      const pr = (presMes.find((x) => x.sucursal === s2) || {}).monto || 0;
+      const g = gasto(tAct, s2);
+      const proy = dAct >= 5 ? g / dAct * diasMes : null;
+      const pct = pr ? g / pr * 100 : null;
+      const pctProy = pr && proy !== null ? proy / pr * 100 : null;
+      const estado = pct === null ? '<span class="gris">Sin presupuesto</span>' : pct > 100 ? '<span class="mal">● Superado</span>' : pct >= 90 ? '<span class="aviso">● Cerca del límite</span>' : '<span class="ok">● Dentro</span>';
+      const proyTxt = proy === null ? '<span class="gris">desde el día 5</span>' : pctProy === null ? pesoV(proy) : (pctProy > 100 ? '<span class="mal">' : '<span class="ok">') + pesoV(proy) + ' (' + pctProy.toFixed(0) + '%)</span>';
+      const barra = pct === null ? '' : '<div style="height:8px;border-radius:6px;background:var(--linea);overflow:hidden;margin-top:4px"><i style="display:block;height:100%;width:' + Math.min(pct, 100).toFixed(1) + '%;background:' + (pct > 100 ? '#B42318' : pct >= 90 ? '#D99A00' : '#1F7A4A') + '"></i></div>';
+      return '<tr><td class="fuerte" data-t="Local">' + esc(s2) + '</td><td class="num" data-t="Presupuesto">' + pesoV(pr) + '</td><td class="num" data-t="Gastado">' + pesoV(g) + '</td><td class="num" data-t="% usado">' + (pct === null ? '—' : pct.toFixed(0) + '%') + barra + '</td><td class="num" data-t="Proyección al cierre">' + proyTxt + '</td><td data-t="Estado">' + estado + '</td></tr>';
+    }).join('');
+    const presTablero = '<section class="caja" style="margin-top:14px"><h2>Presupuesto contra lo real</h2><p class="nota" style="margin:0 0 8px">Gastado hasta hoy y proyección al cierre del mes, calculada desde el día 5 con el ritmo de gasto de este mes.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Presupuesto</th><th class="num">Gastado</th><th class="num">% usado</th><th class="num">Proyección al cierre</th><th>Estado</th></tr></thead><tbody>' + filasPres + '</tbody></table></div></section>';
     v.innerHTML = cabecera('Tablero', 'Indicadores del mes: gasto por local comparado con el mismo período del mes anterior.') +
       '<section class="tarjetas">' +
       tarjeta('Gasto de este mes', pesoV(sumAct), tAct.length + ' turnos · ' + (sumPrev ? pctFlecha((sumAct - sumPrev) / sumPrev * 100) + ' vs mes anterior' : 'sin base de comparación')) +
@@ -1007,7 +1023,7 @@
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
       filasSemaforo(filas) +
       '</tbody></table></div></section>' +
-      '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
+      presTablero + '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Gasto de los últimos 6 meses</h2>' + columnas + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Part-time del mes: turnos y pagos</h2>' +
       (ranking.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' +
