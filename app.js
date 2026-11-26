@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.17';
+  const VERSION = '2026.11.26.18';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -1131,6 +1131,22 @@
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Turnos este mes</th><th class="num">Costo este mes</th><th class="num">Promedio por turno</th><th class="num">Promedio mes anterior</th><th>Variación</th></tr></thead><tbody>' +
       visibles().map((s2) => filaCosto(s2)).join('') + (visibles().length > 1 ? filaCosto(null, 'TOTAL') : '') +
       '</tbody></table></div></section>';
+    // cumplimiento de la planificación: asistió / planificados hasta hoy (sin cancelados)
+    const planMes = await DB.plan({ desde: mes + '-01', hasta: h }).catch(() => []);
+    const cumpl = (s2) => {
+      const ps = planMes.filter((p) => (!s2 || p.sucursal === s2) && p.estado !== 'CANCELADO');
+      const asis = ps.filter((p) => p.estado === 'ASISTIÓ').length, no = ps.filter((p) => p.estado === 'NO ASISTIÓ').length, pend = ps.filter((p) => p.estado === 'PLANIFICADO').length;
+      return { n: ps.length, asis, no, pend, pct: ps.length ? asis / ps.length * 100 : null };
+    };
+    const filaCumpl = (s2, etiqueta) => {
+      const c = cumpl(s2);
+      const pctTxt = c.pct === null ? '<span class="gris">Sin planificación</span>' : '<span class="' + (c.pct >= 90 ? 'ok' : c.pct >= 75 ? 'aviso' : 'mal') + ' fuerte">' + c.pct.toFixed(0) + '%</span>';
+      return '<tr><td class="fuerte" data-t="Local">' + esc(etiqueta || s2) + '</td><td class="num" data-t="Planificados">' + c.n + '</td><td class="num" data-t="Asistió">' + c.asis + '</td><td class="num" data-t="No asistió">' + c.no + '</td><td class="num" data-t="Por confirmar">' + c.pend + '</td><td class="num" data-t="Cumplimiento">' + pctTxt + '</td></tr>';
+    };
+    const cumplTablero = '<section class="caja" style="margin-top:14px"><h2>Cumplimiento de la planificación</h2><p class="nota" style="margin:0 0 8px">Turnos planificados de este mes hasta hoy. Verde: 90% o más · Amarillo: 75% a 89% · Rojo: menos de 75%. Los “por confirmar” cuentan como no cumplidos hasta que se confirme su asistencia.</p>' +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Planificados</th><th class="num">Asistió</th><th class="num">No asistió</th><th class="num">Por confirmar</th><th class="num">Cumplimiento</th></tr></thead><tbody>' +
+      visibles().map((s2) => filaCumpl(s2)).join('') + (visibles().length > 1 ? filaCumpl(null, 'TOTAL') : '') +
+      '</tbody></table></div></section>';
     v.innerHTML = cabecera('Tablero', 'Indicadores del mes: gasto por local comparado con el mismo período del mes anterior.') +
       '<section class="tarjetas">' +
       tarjeta('Gasto de este mes', pesoV(sumAct), tAct.length + ' turnos · ' + (sumPrev ? pctFlecha((sumAct - sumPrev) / sumPrev * 100) + ' vs mes anterior' : 'sin base de comparación')) +
@@ -1143,7 +1159,7 @@
       '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Local</th><th class="num">Mes anterior</th><th class="num">Este mes</th><th class="num">Variación</th><th>Semáforo</th></tr></thead><tbody>' +
       filasSemaforo(filas) +
       '</tbody></table></div></section>' +
-      tendTablero + costoTablero + presTablero + '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
+      tendTablero + costoTablero + cumplTablero + presTablero + '<section class="caja" style="margin-top:14px"><h2>Gasto por local: este mes contra el anterior</h2>' + barrasLocal + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Gasto de los últimos 6 meses</h2>' + columnas + '</section>' +
       '<section class="caja" style="margin-top:14px"><h2>Part-time del mes: turnos y pagos</h2>' +
       (ranking.length ? '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Pagos del mes</th></tr></thead><tbody>' +
