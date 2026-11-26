@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.14';
+  const VERSION = '2026.11.26.15';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -830,6 +830,39 @@
   }
 
   // ================================================================== REPORTES
+  // formato de las hojas de Excel: títulos, encabezados azules, totales en negrita, bordes y números con separador
+  function hojaBonita(aoa) {
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    if (!ws['!ref']) return ws;
+    const rng = XLSX.utils.decode_range(ws['!ref']);
+    const borde = { top: { style: 'thin', color: { rgb: 'C9D2DC' } }, bottom: { style: 'thin', color: { rgb: 'C9D2DC' } }, left: { style: 'thin', color: { rgb: 'C9D2DC' } }, right: { style: 'thin', color: { rgb: 'C9D2DC' } } };
+    const CAB = ['Sucursal', 'Persona', 'Función', 'Quincena'];
+    for (let R = rng.s.r; R <= rng.e.r; R++) {
+      const fila = aoa[R] || [];
+      const primera = fila.length ? String(fila[0] == null ? '' : fila[0]) : '';
+      const esTitulo = fila.length === 1 && primera !== '';
+      const esCab = fila.length > 1 && CAB.includes(primera);
+      const esTot = fila.length > 1 && (primera === 'TOTAL' || primera === 'Total');
+      for (let C = rng.s.c; C <= rng.e.c; C++) {
+        const cell = ws[XLSX.utils.encode_cell({ r: R, c: C })];
+        if (!cell) continue;
+        const st = { border: borde, alignment: { vertical: 'center' } };
+        if (esTitulo) st.font = { bold: true, sz: 12, color: { rgb: '12355B' } };
+        else if (esCab) { st.font = { bold: true, color: { rgb: 'FFFFFF' } }; st.fill = { fgColor: { rgb: '12355B' } }; st.alignment = { horizontal: C === 0 ? 'left' : 'center', vertical: 'center', wrapText: true }; }
+        else if (esTot) { st.font = { bold: true }; st.fill = { fgColor: { rgb: 'E8EEF6' } }; }
+        if (cell.t === 'n') { cell.z = '#,##0'; if (!esCab) st.alignment = { horizontal: 'right', vertical: 'center' }; }
+        cell.s = st;
+      }
+    }
+    const cols = [];
+    for (let C = rng.s.c; C <= rng.e.c; C++) {
+      let max = 10;
+      for (let R = rng.s.r; R <= rng.e.r; R++) { const v = aoa[R] && aoa[R][C]; if (v != null) max = Math.max(max, String(v).length); }
+      cols.push({ wch: Math.min(max + 3, 45) });
+    }
+    ws['!cols'] = cols;
+    return ws;
+  }
   // exportación mensual para contabilidad: Excel con 4 hojas; cada resumen separa 1ª quincena, 2ª quincena y total
   async function exportarMensualXlsx(mes, turnos, sucs, pers, persPan) {
     if (typeof XLSX === 'undefined') return mensaje('No se pudo cargar el generador de Excel. Revisa la conexión y vuelve a intentar.', true);
@@ -860,7 +893,7 @@
     bloque('1ª quincena (1 al 15)', t1);
     bloque('2ª quincena (16 al fin de mes)', t2);
     bloque('Total del mes', turnos);
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r1), 'Resumen');
+    XLSX.utils.book_append_sheet(libro, hojaBonita(r1), 'Resumen');
     // 2) detalle por persona: turnos y total de cada quincena y del mes
     const det = {};
     const ficha = (t) => { const k = L.normNombre(t.nombre); return det[k] || (det[k] = { nombre: t.nombre, sucs: new Set(), a: { n: 0, m: 0 }, b: { n: 0, m: 0 }, horas: 0, pan: 0, loc: 0 }); };
@@ -873,7 +906,7 @@
     const r2 = [['Persona', 'Sucursales', 'Turnos 1ª quincena', 'Total 1ª quincena', 'Turnos 2ª quincena', 'Total 2ª quincena', 'Turnos del mes', 'Total del mes', 'Horas', 'Panadería', 'Locomoción']];
     Object.values(det).sort((a, b) => a.nombre.localeCompare(b.nombre)).forEach((x) =>
       r2.push([x.nombre, [...x.sucs].join(', '), x.a.n, Math.round(x.a.m), x.b.n, Math.round(x.b.m), x.a.n + x.b.n, Math.round(x.a.m + x.b.m), Math.round(x.horas * 100) / 100, Math.round(x.pan), Math.round(x.loc)]));
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r2), 'Detalle por persona');
+    XLSX.utils.book_append_sheet(libro, hojaBonita(r2), 'Detalle por persona');
     // 3) por función: 1ª quincena, 2ª quincena y total
     const FUN = { CAJA: 'Caja', ROTICERIA: 'Rotisería', REPONEDOR: 'Reponedor', ENCARGADO: 'Encargado', PANADERIA: 'Panadería', '': 'Sin definir' };
     const r3 = [['Función', 'Turnos 1ª quincena', 'Total 1ª quincena', 'Turnos 2ª quincena', 'Total 2ª quincena', 'Turnos del mes', 'Total del mes']];
@@ -882,12 +915,12 @@
       if (!a.length && !b.length) return;
       r3.push([FUN[k], a.length, Math.round(suma(a, tot)), b.length, Math.round(suma(b, tot)), a.length + b.length, Math.round(suma(a, tot) + suma(b, tot))]);
     });
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r3), 'Por función');
+    XLSX.utils.book_append_sheet(libro, hojaBonita(r3), 'Por función');
     // 4) pagos del mes (cada pago indica su quincena)
     const r4 = [['Quincena', 'Persona', 'Monto pagado', 'Fecha de pago', 'Total de la quincena', 'Saldo', 'Observación']];
     pagos.sort((a, b) => String(a.quincena).localeCompare(String(b.quincena)) || String(a.nombre).localeCompare(String(b.nombre)))
       .forEach((a) => r4.push([a.quincena, a.nombre, Math.round(a.monto), a.fecha_pago || '', a.total_quincena != null ? Math.round(a.total_quincena) : '', a.saldo_despues != null ? Math.round(a.saldo_despues) : '', a.obs || '']));
-    XLSX.utils.book_append_sheet(libro, XLSX.utils.aoa_to_sheet(r4), 'Pagos del mes');
+    XLSX.utils.book_append_sheet(libro, hojaBonita(r4), 'Pagos del mes');
     XLSX.writeFile(libro, 'PartTime_' + mes + '_contabilidad.xlsx');
   }
 
