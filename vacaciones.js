@@ -216,7 +216,7 @@
       const motivo = s.estado === 'rechazada' && s.motivo_rechazo ? '<div class="vac-nota">Motivo: ' + esc(s.motivo_rechazo) + '</div>' : '';
       return '<li><b>' + esc(nombrePersona(s.personal_id)) + '</b> · ' + esc(s.local) + '<br>' +
         '<span class="vac-nota">' + s.dias + ' días · ' + dDe(s.inicio).toLocaleDateString('es-CL') + ' al ' + dDe(s.fin).toLocaleDateString('es-CL') + ' · retorno ' + dDe(s.retorno).toLocaleDateString('es-CL') + ' · ' +
-        '<span class="vac-est ' + s.estado + '">' + (s.estado === 'aprobada' ? 'Aprobada' : s.estado === 'rechazada' ? 'Rechazada' : 'Pendiente · admin ' + (s.ok_administracion ? '✔' : '—') + ' · gerencia ' + (s.ok_gerencia ? '✔' : '—')) + '</span></span>' +
+        '<span class="vac-est ' + esc(s.estado) + '">' + (s.estado === 'aprobada' ? 'Aprobada' : s.estado === 'rechazada' ? 'Rechazada' : 'Pendiente · admin ' + (s.ok_administracion ? '✔' : '—') + ' · gerencia ' + (s.ok_gerencia ? '✔' : '—')) + '</span></span>' +
         motivo + cambiar + '</li>';
     }).join('') + '</ul>';
   }
@@ -694,12 +694,12 @@
     html += [0, 1, 2, 3, 4, 5, 6].map((i) => {
       const d = iso(sumaD(dDe(lun), i));
       const items = mios.filter((x) => x.fecha === d);
-      const txt = items.length ? items.map((x) => x.e + '–' + x.s + ' ' + esc(x.suc)).join(', ') : 'libre';
+      const txt = items.length ? items.map((x) => esc(x.e) + '–' + esc(x.s) + ' ' + esc(x.suc)).join(', ') : 'libre';
       return '<span style="' + (d === f ? 'font-weight:700' : '') + '">' + DIAS_CORTO[dDe(d).getDay()] + ' ' + dDe(d).getDate() + ': ' + txt + '</span>';
     }).join(' · ') + '</div>';
     if (e0 && s0) {
       mios.filter((x) => x.fecha === f && cruzan(e0, s0, x.e, x.s)).forEach((x) => {
-        html += '<div style="color:#b91c1c;font-weight:600">⚠ Ese día tiene ' + (x.de === 'turno' ? 'turno' : 'planificación') + ' en ' + esc(x.suc) + ' (' + x.e + '–' + x.s + ') que se cruza con este horario. La base no lo deja guardar.</div>';
+        html += '<div style="color:#b91c1c;font-weight:600">⚠ Ese día tiene ' + (x.de === 'turno' ? 'turno' : 'planificación') + ' en ' + esc(x.suc) + ' (' + esc(x.e) + '–' + esc(x.s) + ') que se cruza con este horario. La base no lo deja guardar.</div>';
       });
     }
     caja.innerHTML = html;

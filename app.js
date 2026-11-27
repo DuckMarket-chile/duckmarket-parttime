@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.29';
+  const VERSION = '2026.11.26.30';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -368,7 +368,7 @@
     };
     const avisoPlan = () => {
       const n = L.normNombre(form.nombre.value), p = pend.find((x) => L.normNombre(x.nombre) === n && x.sucursal === form.sucursal.value);
-      $('#aviso-plan', v).innerHTML = p && !e.id ? '<div class="ayuda" style="background:#EAF1FA;color:var(--azul)"><b>Estaba planificada para este día</b> (' + p.entrada + '–' + p.salida + ', ' + pesoV(p.total) + '). Al guardar se confirma su asistencia.</div>' : '';
+      $('#aviso-plan', v).innerHTML = p && !e.id ? '<div class="ayuda" style="background:#EAF1FA;color:var(--azul)"><b>Estaba planificada para este día</b> (' + esc(p.entrada) + '–' + esc(p.salida) + ', ' + pesoV(p.total) + '). Al guardar se confirma su asistencia.</div>' : '';
       if (p && !e.id && !form.pago.value) { form.entrada.value = p.entrada; form.salida.value = p.salida; form.pago.value = p.pago; form.locomocion.value = Number(p.locomocion) || ''; recalcular(); }
     };
     campoPersona(form.nombre, $('#sug', v), () => { avisoPlan(); form.entrada.focus(); });
@@ -408,8 +408,8 @@
     if (!turnos) turnos = await DB.turnos({ desde: p.fecha, hasta: p.fecha, sucursal: p.sucursal });
     const ya = turnos.find((t) => t.fecha === p.fecha && t.sucursal === p.sucursal && L.normNombre(t.nombre) === L.normNombre(p.nombre));
     const r = await dialogo('Confirmar asistencia', '<p class="nota" style="margin:0"><b>' + esc(p.nombre) + '</b> · ' + esc(p.sucursal) + ' · ' + L.fechaTxt(p.fecha) + '</p>' +
-      (ya ? '<label class="check"><input type="checkbox" name="enlazar" checked> Ya tiene el turno N°' + ya.id + ' registrado (' + ya.entrada + '–' + ya.salida + '): usar ese, no crear otro</label>' : '') +
-      '<div class="campos2"><label class="campo">Entrada<input name="entrada" type="time" required value="' + p.entrada + '"></label><label class="campo">Salida<input name="salida" type="time" required value="' + p.salida + '"></label>' +
+      (ya ? '<label class="check"><input type="checkbox" name="enlazar" checked> Ya tiene el turno N°' + esc(ya.id) + ' registrado (' + esc(ya.entrada) + '–' + esc(ya.salida) + '): usar ese, no crear otro</label>' : '') +
+      '<div class="campos2"><label class="campo">Entrada<input name="entrada" type="time" required value="' + esc(p.entrada) + '"></label><label class="campo">Salida<input name="salida" type="time" required value="' + esc(p.salida) + '"></label>' +
       '<label class="campo">Colación (min)<input name="colacion" type="number" min="0" step="5" value="' + Number(p.colacion || 0) + '"></label><label class="campo">Pago<input name="pago" inputmode="numeric" value="' + Number(p.pago) + '"></label></div>' +
       '<label class="campo">Locomoción<input name="locomocion" inputmode="numeric" value="' + (Number(p.locomocion) || '') + '"></label><label class="campo">Observación<input name="obs" value="' + esc(p.obs || '') + '"></label>',
     { boton: 'Asistió', validar: (d) => DB.confirmarPlan(p.id, { entrada: d.entrada, salida: d.salida, colacion: L.num(d.colacion), pago: L.num(d.pago), locomocion: L.num(d.locomocion), obs: d.obs }, d.enlazar && ya ? ya.id : null).then(() => null) });
@@ -1372,7 +1372,7 @@
     }
     v.innerHTML = cabecera('Buscar persona', 'Todos los turnos y planificaciones de una persona en un rango de fechas.') +
       '<section class="zona"><form class="caja" id="f-bus" autocomplete="off"><div class="campos-auto"><label class="campo" style="grid-column:span 2">Persona<input name="nombre" required value="' + esc(filtro.nombre) + '" placeholder="Nombre o RUT"></label>' +
-      '<label class="campo">Desde<input type="date" name="desde" value="' + filtro.desde + '"></label><label class="campo">Hasta<input type="date" name="hasta" value="' + filtro.hasta + '"></label><button class="btn pri" type="submit">Buscar</button></div><div class="sugerencias oculto" id="sug"></div></form></section>' +
+      '<label class="campo">Desde<input type="date" name="desde" value="' + esc(filtro.desde) + '"></label><label class="campo">Hasta<input type="date" name="hasta" value="' + esc(filtro.hasta) + '"></label><button class="btn pri" type="submit">Buscar</button></div><div class="sugerencias oculto" id="sug"></div></form></section>' +
       '<section class="zona">' + res + '</section>';
     const f = $('#f-bus', v);
     const buscar = () => vistaBuscar(v, { nombre: f.nombre.value, desde: f.desde.value, hasta: f.hasta.value });
