@@ -4,6 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
+<!-- Política de contenido (auditoría 26-11-2026). Sin scripts en línea: solo archivos propios y tres CDN con SRI.
+     style-src permite estilos en línea porque la app usa atributos style="" (no ejecutan código).
+     connect-src: solo el proyecto de Supabase de Part-Time (si cambia la URL en config.js, cambiarla aquí también).
+     frame-ancestors no se puede poner en <meta>: para bloquear que la web se incruste en otros sitios, hay que
+     configurarlo en el servidor (GitHub Pages no lo permite). -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' https://dnaqxvpwubjaltaxkrpa.supabase.co wss://dnaqxvpwubjaltaxkrpa.supabase.co; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'">
 <meta name="theme-color" content="#12355B">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
@@ -13,19 +19,19 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23F2B705'/%3E%3Ctext x='20' y='28' font-family='Arial' font-weight='800' font-size='22' text-anchor='middle' fill='%2312355B'%3ED%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="estilos.css?v=2026.11.26.26">
-<link rel="stylesheet" href="vacaciones.css?v=2026.11.26.26">
+<link rel="stylesheet" href="estilos.css?v=2026.11.26.27">
+<link rel="stylesheet" href="vacaciones.css?v=2026.11.26.27">
 </head>
 <body>
 <div class="cargando">Cargando…</div>
 <noscript>Esta página necesita JavaScript.</noscript>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
-<script src="config.js?v=2026.11.26.26"></script>
-<script src="logica.js?v=2026.11.26.26"></script>
-<script src="datos.js?v=2026.11.26.26"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="vacaciones.js?v=2026.11.26.26"></script>
-<script src="app.js?v=2026.11.26.26"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js" integrity="sha384-0w2KAL2YHP6wKOkUDzkCDGgVvfmHnj02DHeQ6XcHOgTfFsGyonKOpShMH1x6nk9o" crossorigin="anonymous"></script>
+<script src="config.js?v=2026.11.26.27"></script>
+<script src="logica.js?v=2026.11.26.27"></script>
+<script src="datos.js?v=2026.11.26.27"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js" integrity="sha384-OUW9euuUyxyHcAhTqbhI+Iyb8LMssXt/cpz0yXhs9UWG2/R/uaWdakx/4cfww7Vb" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous"></script>
+<script src="vacaciones.js?v=2026.11.26.27"></script>
+<script src="app.js?v=2026.11.26.27"></script>
 </body>
 </html>

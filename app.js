@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.26';
+  const VERSION = '2026.11.26.27';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -618,10 +618,12 @@
       '<tr><th>Medio / observación</th><td>' + esc(a.obs || '—') + (a.comprobante ? ' · MP ' + esc(a.comprobante) : '') + '</td></tr>' +
       '<tr><th>Saldo que queda (a la fecha)</th><td>' + L.peso(Math.max(sel.saldo, 0)) + '</td></tr></table>' +
       '<div class="firmas"><div><span></span>Recibí conforme</div><div><span></span>Autorizado por</div></div>' +
-      '<script>window.onload=function(){window.print();};<\/script></body></html>';
+      '</body></html>';
     const w = window.open('', '_blank');
     if (!w) return mensaje('El navegador bloqueó la ventana. Permite ventanas emergentes para ver el comprobante.', true);
     w.document.open(); w.document.write(html); w.document.close();
+    // sin <script> en la ventana (la política de contenido lo bloquea): la imprime esta misma página
+    setTimeout(() => { w.focus(); w.print(); }, 400);
   }
 
   async function vistaPagos(v, filtro) {
