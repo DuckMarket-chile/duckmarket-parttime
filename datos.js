@@ -126,6 +126,14 @@
         if (!r.data || !r.data.ok) throw new Error((r.data && r.data.error) || 'No se pudo crear el usuario');
         return r.data;
       },
+      // envía a Mercado Pago los pagos ya registrados (Edge Function pagar-mp; el servidor valida todo)
+      async enviarPagosMp(ids) {
+        const r = await sb.functions.invoke('pagar-mp', { body: { accion: 'enviar', abono_ids: ids, confirmar: true } });
+        let m = '';
+        if (r.error) { m = r.error.message || 'No se pudo enviar'; try { const j = await r.error.context.json(); m = j.error || m; } catch (e) {} }
+        if (r.error || !r.data || !r.data.ok) throw new Error(m || (r.data && r.data.error) || 'No se pudo enviar');
+        return r.data;
+      },
       async guardarPerfil(p) {
         ok(await sb.from('perfiles').update({ nombre: p.nombre, sucursal: p.sucursal || null, rol: p.rol, admin: p.rol === 'admin', permisos: p.rol === 'admin' ? [] : p.permisos, activo: p.activo !== false }).eq('id', p.id));
       },

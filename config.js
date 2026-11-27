@@ -5,5 +5,8 @@
 window.CONFIG_PARTTIME = {
   url: 'https://dnaqxvpwubjaltaxkrpa.supabase.co',            // ej. https://abcdefghijkl.supabase.co
   clave: 'sb_publishable_DEBHKYFt1PwYvoy-OYxbsA_YBCW9nUI', // ej. sb_publishable_…  o  eyJ… (anon)
-  dominio: 'parttime.duckmarket.cl'    // usuario "andes" entra como andes@parttime.duckmarket.cl
+  dominio: 'parttime.duckmarket.cl',    // usuario "andes" entra como andes@parttime.duckmarket.cl
+  // Pagar por Mercado Pago desde Pagos quincenales. Activar (true) solo cuando la función pagar-mp esté desplegada
+  // y el SQL 35 ejecutado: si el botón aparece antes, los pagos quedan registrados sin enviarse.
+  mpPagos: false
 };

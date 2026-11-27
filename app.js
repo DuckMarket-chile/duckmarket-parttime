@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.30';
+  const VERSION = '2026.11.27.1';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -663,7 +663,8 @@
     const pendientesV = vis.filter((f) => f.saldo > 0.5);
     const pagoVariosHtml = (pendientesV.length && tiene('RegistrarPago')) ? '<div class="caja" style="margin-top:14px"><h2>Pagar a varias personas</h2><p class="nota" style="margin:0 0 6px">Marca a quienes vas a pagar su saldo completo de esta quincena.</p>' +
       '<div style="max-height:260px;overflow:auto">' + pendientesV.map((f) => '<label style="display:flex;gap:8px;align-items:center;padding:4px 0;border-bottom:1px solid var(--linea)"><input type="checkbox" data-pv="' + esc(f.nombre) + '"><span style="flex:1">' + esc(f.nombre) + '</span><b>' + L.peso(f.saldo) + '</b></label>').join('') + '</div>' +
-      '<button type="button" class="btn ama" data-acc="pagar-varios" style="margin-top:10px">Registrar pagos marcados</button></div>' : '';
+      '<button type="button" class="btn ama" data-acc="pagar-varios" style="margin-top:10px">Registrar pagos marcados</button>' +
+      (typeof DB.enviarPagosMp === 'function' && window.CONFIG_PARTTIME.mpPagos === true ? ' <button type="button" class="btn" data-acc="pagar-mp" style="margin-top:10px">Pagar por Mercado Pago</button>' : '') + '</div>' : '';
 
     let sel = filas.find((f) => f.nombre === S.pagoSel) || vis[0];
     const per = sel ? L.buscarPersona(personas, sel.nombre, sel.rut) : null;
@@ -706,6 +707,43 @@
           lista.map((x) => '<tr><td>' + est(x[0], tipo(x[0])) + '</td><td class="gris" style="white-space:nowrap">' + L.fechaTxt(x[1]).slice(0, 5) + ' ' + esc(x[2]) + '</td><td><b>' + esc(x[3]) + '</b><div class="nota">' + esc(x[4]) + '</div></td></tr>').join('') + '</tbody></table></div>'
           : '<p style="margin:0">Todo en orden: no hay planificados sin confirmar, turnos duplicados, pagos en $0 ni personas fuera de la base.</p>', { boton: 'Cerrar', sinCancelar: true });
         return;
+      }
+      if (b.dataset.acc === 'pagar-mp') {
+        // registra el pago de cada persona marcada y lo envía a Mercado Pago en un solo lote
+        const marcados = [...v.querySelectorAll('input[data-pv]:checked')].map((i) => i.dataset.pv);
+        if (!marcados.length) return mensaje('Marca al menos una persona.', true);
+        const correoOk = (c) => /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(String(c || '').trim());
+        const elegidas = filas.filter((f) => marcados.includes(f.nombre));
+        const conDestino = [], sinDestino = [];
+        elegidas.forEach((f) => { const p2 = L.buscarPersona(personas, f.nombre, f.rut); (p2 && /mercado\s*pago/i.test(p2.banco || '') && correoOk(p2.cuenta) ? conDestino : sinDestino).push(f); });
+        if (!conDestino.length) return mensaje('Ninguna de las marcadas tiene destino de Mercado Pago válido (en Personas: banco "Mercado Pago" y correo en Cuenta).', true);
+        const total = conDestino.reduce((a, f) => a + f.saldo, 0);
+        const txt = 'Se registrará el pago de ' + conDestino.length + ' persona(s) por ' + L.peso(total) + ' y se enviará el dinero a su cuenta de Mercado Pago.\nUna vez enviado no se puede cancelar desde la web.' +
+          (sinDestino.length ? '\n\nNo se pagan (sin destino de Mercado Pago válido): ' + sinDestino.map((f) => f.nombre).join(', ') + '.' : '') + '\n\n¿Confirmas el envío?';
+        if (!(await confirmar('Pagar por Mercado Pago', txt, 'Registrar y enviar', true))) return;
+        const ids = [];
+        try {
+          for (const f of conDestino) {
+            const per2 = L.buscarPersona(personas, f.nombre, f.rut);
+            ids.push(await DB.registrarAbono({ nombre: f.nombre, rut: f.rut || (per2 && per2.rut) || '', quincena: q.clave, monto: f.saldo, fecha_pago: hoy(), obs: 'Mercado Pago (Payouts)', comprobante: '' }));
+          }
+        } catch (e) {
+          falla(e);
+          if (ids.length) mensaje('Se registraron ' + ids.length + ' pago(s) antes del error (N° ' + ids.join(', N° ') + '). Revísalos antes de seguir.', true);
+          return vistaPagos(v, filtro);
+        }
+        let reintentar = true;
+        while (reintentar) {
+          try {
+            const res = await DB.enviarPagosMp(ids);
+            mensaje('Pagos enviados a Mercado Pago: ' + ids.length + ' persona(s), ' + L.peso(total) + '. Lote ' + (res.lote || '') + '.');
+            reintentar = false;
+          } catch (e) {
+            reintentar = await confirmar('Envío no completado', 'Los pagos ya están registrados (N° ' + ids.join(', N° ') + ').\nMotivo: ' + e.message + '\n\n¿Reintentar el envío ahora?', 'Reintentar');
+            if (!reintentar) mensaje('Los pagos quedaron registrados sin enviar. Revisa el envío antes de volver a intentarlo.', true);
+          }
+        }
+        return vistaPagos(v, filtro);
       }
       if (b.dataset.acc === 'pagar-varios') {
         const marcados = [...v.querySelectorAll('input[data-pv]:checked')].map((i) => i.dataset.pv);
