@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.27';
+  const VERSION = '2026.11.26.28';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -849,14 +849,15 @@
     const p = selId === 'nueva' ? { activo: true } : lista.find((x) => x.id === selId) || null;
     const campo = (k, tit, extra) => '<label class="campo">' + tit + '<input name="' + k + '" value="' + esc(p[k] || '') + '"' + (extra || '') + '></label>';
     const edita = tiene('EditarPersonas');
-    v.innerHTML = cabecera('Personas', lista.length + ' part-time en la base. Los datos bancarios solo los ve quien tiene permiso de Personas o Pagos.', edita ? '<button class="btn ama" data-acc="nueva">Agregar persona</button>' : '') +
+    const vb = tiene('VerBancos');   // datos bancarios: solo con el permiso VerBancos
+    v.innerHTML = cabecera('Personas', lista.length + ' part-time en la base. Los datos bancarios solo los ve quien tiene el permiso Ver datos bancarios.', edita ? '<button class="btn ama" data-acc="nueva">Agregar persona</button>' : '') +
       '<section class="rejilla"><div class="caja ancho2"><label class="campo"><span class="sr">Buscar</span><input type="search" id="p-txt" placeholder="Buscar por nombre o RUT" value="' + esc(texto || '') + '"></label>' +
-      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Nombre</th><th>RUT</th><th>Teléfono</th><th>Banco</th><th>Estado</th></tr></thead><tbody>' +
-      vis.map((x) => '<tr class="clic' + (p && p.id === x.id ? ' sel' : '') + '" data-acc="ver" data-id="' + x.id + '"><td class="fuerte" data-t="Nombre"><button class="enlace" data-acc="ver" data-id="' + x.id + '">' + esc(x.nombre) + '</button></td><td data-t="RUT">' + esc(x.rut) + '</td><td data-t="Teléfono">' + esc(x.telefono) + '</td><td class="gris" data-t="Banco">' + esc(x.banco) + '</td><td data-t="Estado">' + (x.activo !== false ? est('Activo', 'ok') : est('Inactivo', 'neu')) + '</td></tr>').join('') +
+      '<div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Nombre</th><th>RUT</th><th>Teléfono</th>' + (vb ? '<th>Banco</th>' : '') + '<th>Estado</th></tr></thead><tbody>' +
+      vis.map((x) => '<tr class="clic' + (p && p.id === x.id ? ' sel' : '') + '" data-acc="ver" data-id="' + x.id + '"><td class="fuerte" data-t="Nombre"><button class="enlace" data-acc="ver" data-id="' + x.id + '">' + esc(x.nombre) + '</button></td><td data-t="RUT">' + esc(x.rut) + '</td><td data-t="Teléfono">' + esc(x.telefono) + '</td>' + (vb ? '<td class="gris" data-t="Banco">' + esc(x.banco) + '</td>' : '') + '<td data-t="Estado">' + (x.activo !== false ? est('Activo', 'ok') : est('Inactivo', 'neu')) + '</td></tr>').join('') +
       '</tbody></table></div></div>' +
       (p ? '<form class="caja" id="f-per"><h2>' + (p.id ? 'Editar persona' : 'Nueva persona') + '</h2>' + campo('nombre', 'Nombre completo', ' required') + '<div class="campos2">' + campo('rut', 'RUT') + campo('telefono', 'Teléfono', ' inputmode="tel"') + '</div>' + campo('correo', 'Correo', ' type="email"') + campo('direccion', 'Dirección') +
-        '<div class="campos2"><label class="campo">Banco<input name="banco" list="l-bancos" value="' + esc(p.banco || '') + '"></label><label class="campo">Tipo de cuenta<select name="tipo_cuenta"><option value=""></option>' + opciones(TIPOS, p.tipo_cuenta) + '</select></label></div>' +
-        campo('cuenta', 'N° de cuenta') + '<label class="campo">Otros nombres (como aparece en transferencias), separados por |<input name="variantes" value="' + esc(p.variantes || '') + '"></label>' + campo('obs', 'Observación') +
+        (vb ? '<div class="campos2"><label class="campo">Banco<input name="banco" list="l-bancos" value="' + esc(p.banco || '') + '"></label><label class="campo">Tipo de cuenta<select name="tipo_cuenta"><option value=""></option>' + opciones(TIPOS, p.tipo_cuenta) + '</select></label></div>' : '') +
+        (vb ? campo('cuenta', 'N° de cuenta') : '') + '<label class="campo">Otros nombres (como aparece en transferencias), separados por |<input name="variantes" value="' + esc(p.variantes || '') + '"></label>' + campo('obs', 'Observación') +
         '<label class="check"><input type="checkbox" name="activo"' + (p.activo !== false ? ' checked' : '') + '> Activo (aparece al registrar)</label><datalist id="l-bancos">' + BANCOS.map((b) => '<option value="' + b + '"></option>').join('') + '</datalist>' +
         (edita ? '<button class="btn ama" type="submit">Guardar</button>' : '<p class="nota">Solo consulta: no tienes permiso para modificar personas.</p>') + '</form>' : '<div class="caja"><p class="nota">Elige una persona para ver' + (edita ? ' o editar' : '') + ' sus datos.</p></div>') + '</section>';
     let tt; $('#p-txt', v).oninput = (e) => { clearTimeout(tt); tt = setTimeout(() => vistaPersonas(v, e.target.value, selId).then(() => { const i = $('#p-txt', v); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }), 300); };
@@ -1461,6 +1462,7 @@
     const out = { generado: new Date().toISOString(), tablas: {} };
     for (const t of TABLAS_RESPALDO) {
       if (progreso) progreso('Respaldando ' + t + '…');
+      if (t === 'personas') { try { out.tablas[t] = await DB.personas(); } catch (e) { out.tablas[t] = { error: e.message }; } continue; }
       let filas = [], i = 0;
       for (;;) {
         const r = await sb.from(t).select('*').range(i, i + 999);

@@ -22,6 +22,9 @@
   function crearSupabase() {
     const sb = raiz.supabase.createClient(CFG.url, CFG.clave, { auth: { persistSession: true, storageKey: 'parttime-sesion' } });
     let perfil = null;
+    // columnas de personas que no son bancarias (las bancarias solo con VerBancos, SQL 31)
+    const PERSONA_COLS = 'id,nombre,rut,telefono,direccion,correo,activo,variantes,obs,actualizado,usuario';
+    const tienePerm = (p) => !!perfil && (perfil.admin || (perfil.permisos || []).indexOf(p) >= 0);
     const ok = (r) => { if (r.error) throw new Error(traducir(r.error.message)); return r.data; };
     async function todo(armar) {           // Supabase entrega de a 1000 filas
       let res = [], i = 0;
@@ -58,12 +61,25 @@
       async eliminarTurno(id) { const d = ok(await sb.from('turnos').delete().eq('id', id).select()); if (!d.length) throw new Error('No tienes permiso para eliminar este turno.'); },
 
       personasLista: () => todo(() => sb.from('personas_lista').select('*').order('nombre')),
-      personas: () => todo(() => sb.from('personas').select('*').order('nombre')),
+      // datos bancarios solo para quien tiene VerBancos (SQL 31); los demás los ven vacíos
+      personas: async () => {
+        const lista = await todo(() => sb.from('personas').select(PERSONA_COLS).order('nombre'));
+        const bancos = tienePerm('VerBancos') ? new Map((await todo(() => sb.rpc('personas_bancos'))).map((b) => [b.id, b])) : new Map();
+        return lista.map((p) => Object.assign({ banco: '', tipo_cuenta: '', cuenta: '' }, p, bancos.get(p.id) || {}));
+      },
       async guardarPersona(p) {
         const c = { nombre: p.nombre, rut: p.rut || '', telefono: p.telefono || '', direccion: p.direccion || '', correo: p.correo || '',
-          banco: p.banco || '', tipo_cuenta: p.tipo_cuenta || '', cuenta: p.cuenta || '', activo: p.activo !== false, variantes: p.variantes || '',
-          obs: p.obs || '', actualizado: new Date().toISOString(), usuario: perfil ? perfil.usuario : '' };
-        return p.id ? ok(await sb.from('personas').update(c).eq('id', p.id).select().single()) : ok(await sb.from('personas').insert(c).select().single());
+          activo: p.activo !== false, variantes: p.variantes || '', obs: p.obs || '', actualizado: new Date().toISOString(),
+          usuario: perfil ? perfil.usuario : '' };
+        const fila = p.id ? ok(await sb.from('personas').update(c).eq('id', p.id).select(PERSONA_COLS).single())
+                           : ok(await sb.from('personas').insert(c).select(PERSONA_COLS).single());
+        const banco = { banco: '', tipo_cuenta: '', cuenta: '' };
+        if (tienePerm('VerBancos')) {
+          const datos = { banco: p.banco || '', tipo_cuenta: p.tipo_cuenta || '', cuenta: p.cuenta || '' };
+          ok(await sb.rpc('guardar_bancos', { p_id: fila.id, p_banco: datos.banco, p_tipo: datos.tipo_cuenta, p_cuenta: datos.cuenta }));
+          Object.assign(banco, datos);
+        }
+        return Object.assign(banco, fila);
       },
 
       abonos: () => todo(() => sb.from('abonos').select('*').order('id')),

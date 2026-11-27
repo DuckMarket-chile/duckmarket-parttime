@@ -23,7 +23,7 @@
       ['Pagos', 'Ver pagos quincenales (requiere ver todas las sucursales)'], ['VerPagosLocal', 'Ver estado y monto de pago de los part-time de su sucursal (solo lectura)'], ['RegistrarPago', 'Registrar pagos'],
       ['AnularPago', 'Anular pagos'], ['Conciliar', 'Conciliar con el estado de cuenta de Mercado Pago']]],
     ['Base de part-time', [
-      ['Personas', 'Ver la base de part-time (datos personales y bancarios)'], ['EditarPersonas', 'Agregar, modificar y desactivar personas']]],
+      ['Personas', 'Ver la base de part-time (datos personales)'], ['VerBancos', 'Ver y cambiar datos bancarios de part-time (banco, tipo y N° de cuenta)'], ['EditarPersonas', 'Agregar, modificar y desactivar personas']]],
     ['Informes y administración', [
       ['Exportar', 'Descargar informes en Excel'], ['Historial', 'Ver el historial de cambios'],
       ['Usuarios', 'Administrar usuarios (sin poder dar más permisos que los propios)'],
@@ -32,7 +32,7 @@
   const PERMISOS = GRUPOS_PERMISOS.reduce((s, g) => s.concat(g[1]), []);
   // un permiso sin el permiso del que depende no sirve
   const DEPENDE_DE = { Pagos: 'VerOtras', Correos: 'VerOtras', RegistrarPago: 'Pagos', AnularPago: 'Pagos', Conciliar: 'Pagos',
-    EditarPersonas: 'Personas', PlanificarOtras: 'Planificar', AbrirExcel: 'VerMontos' };
+    EditarPersonas: 'Personas', VerBancos: 'Personas', PlanificarOtras: 'Planificar', AbrirExcel: 'VerMontos' };
   function conDependencias(lista) {
     let s = new Set(lista), cambio = true;
     while (cambio) { cambio = false; for (const k of [...s]) if (DEPENDE_DE[k] && !s.has(DEPENDE_DE[k])) { s.delete(k); cambio = true; } }
