@@ -3,7 +3,7 @@
   'use strict';
   const L = window.L, DB = window.DB;
   // Versión de esta página. Al publicar cambios: subir este número, el de version.json y el ?v= de index.html.
-  const VERSION = '2026.11.26.28';
+  const VERSION = '2026.11.26.29';
   const S = { perfil: null, personas: [], fecha: L.hoyChile(), suc: 'TODAS', planSuc: null, planDia: null, quincena: null, pagoSel: null, conc: null, concTab: 0 };
 
   // ================================================================== utilidades
@@ -996,8 +996,9 @@
     visibles().forEach((x) => { accPor[x] = { n: 0, monto: 0 }; });
     anio.forEach((t) => { const x = accPor[t.sucursal]; if (x) { x.n++; x.monto += Number(t.total); } });
     const accTot = Object.values(accPor).reduce((a, x) => a + x.monto, 0);
-    // presupuesto del mes por local: la administración lo cambia; todos lo ven
-    const presMes = await DB.presupuestos(mes).catch(() => []);
+    // presupuesto del mes por local: la administración lo cambia; lo ven quienes tienen Resumen o Reportes de planificación (SQL 33)
+    const puedePres = tiene('VerResumen') || tiene('ReportesPlan');
+    const presMes = puedePres ? await DB.presupuestos(mes).catch(() => []) : [];
     const gastoSuc = (s2) => turnos.filter((t) => t.sucursal === s2).reduce((a, t) => a + Number(t.total), 0);
     const esAdmin = !!S.perfil.admin;
     const filasPres = visibles().map((s2) => {
@@ -1046,7 +1047,7 @@
     const pers = armarPersonas(turnos.filter((t) => t.funcion !== 'PANADERIA'));
     const persPan = armarPersonas(turnos.filter((t) => t.funcion === 'PANADERIA'));
     v.innerHTML = cabecera('Reportes', 'Resumen del mes y cumplimiento de la planificación.', '<label class="campo">Sucursal<select id="r-suc">' + opciones([['TODAS', 'Todas'], ['ANDES', 'ANDES'], ['ENCINAS', 'ENCINAS'], ['SAN MARTIN', 'SAN MARTIN']], S.repSuc || 'TODAS') + '</select></label>' + '<label class="campo">Mes<select id="r-mes">' + opciones(meses, mes) + '</select></label>' + (tiene('Exportar') ? '<button class="btn" data-acc="exportar">Descargar (Excel)</button>' : '')) +
-      compHtml + funcHtml + accHtml + presHtml + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
+      compHtml + funcHtml + accHtml + (puedePres ? presHtml : '') + '<section class="tarjetas">' + porSuc.map((x) => tarjeta(x.s, pesoV(x.tot), x.n + ' turnos · ' + L.horasTxt(x.h) + ' h')).join('') + tarjeta('Planificado vs real', pesoV(costoReal), 'planificado ' + pesoV(costoPlan), true) + '</section>' +
       '<section class="rejilla"><div class="caja ancho2"><h2>Por persona</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th><th class="num">Mes anterior</th><th class="num">Variación</th></tr></thead><tbody>' +
       pers.map((x) => { const ant = prevPers[L.normNombre(x.nombre)] || 0; return '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td><td class="num" data-t="Mes anterior">' + pesoV(ant) + '</td><td class="num" data-t="Variación">' + (ant ? pctFlecha((x.total - ant) / ant * 100) : '—') + '</td></tr>'; }).join('') +
       '</tbody></table></div></div>' + (persPan.length ? '<div class="caja ancho2" style="margin-top:14px"><h2>Panadería · pagos aparte</h2><div class="tabla-caja"><table class="tarjetas-movil"><thead><tr><th>Persona</th><th>Sucursales</th><th class="num">Turnos</th><th class="num">Horas</th><th class="num">Total</th></tr></thead><tbody>' + persPan.map((x) => '<tr><td class="fuerte" data-t="Persona">' + esc(x.nombre) + '</td><td class="gris" data-t="Sucursales">' + esc([...x.sucs].join(', ')) + '</td><td class="num" data-t="Turnos">' + x.turnos + '</td><td class="num" data-t="Horas">' + L.horasTxt(x.horas) + '</td><td class="num fuerte" data-t="Total">' + pesoV(x.total) + '</td></tr>').join('') + '</tbody></table></div></div>' : '') + '<div class="caja"><h2>Asistencia a lo planificado</h2>' + (asis.size ? '<table class="tarjetas-movil"><thead><tr><th>Persona</th><th class="num">Plan.</th><th class="num">Asistió</th><th class="num">Faltó</th></tr></thead><tbody>' +
